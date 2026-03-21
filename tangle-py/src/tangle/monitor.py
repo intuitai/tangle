@@ -1,0 +1,357 @@
+# src/tangle/monitor.py
+
+import threading
+import time
+from collections.abc import Callable
+
+import structlog
+
+from tangle.config import TangleConfig
+from tangle.detector.cycle import CycleDetector
+from tangle.detector.livelock import LivelockDetector
+from tangle.graph.snapshot import GraphSnapshot
+from tangle.graph.wfg import WaitForGraph
+from tangle.resolver.alert import AlertResolver
+from tangle.resolver.cancel import CancelResolver
+from tangle.resolver.chain import ResolverChain
+from tangle.resolver.escalate import EscalateResolver
+from tangle.resolver.tiebreaker import TiebreakerResolver
+from tangle.store.memory import MemoryStore
+from tangle.types import (
+    AgentID,
+    AgentStatus,
+    Detection,
+    DetectionType,
+    Edge,
+    Event,
+    EventType,
+    Severity,
+)
+
+logger = structlog.get_logger("tangle")
+
+
+class TangleMonitor:
+    """Main entry point. Thread-safe."""
+
+    def __init__(
+        self,
+        config: TangleConfig | None = None,
+        clock: Callable[[], float] | None = None,
+        on_detection: Callable[[Detection], None] | None = None,
+        cancel_fn: Callable[[AgentID, str], None] | None = None,
+        tiebreaker_fn: Callable[[AgentID, str], None] | None = None,
+        escalate_fn: Callable[[Detection], None] | None = None,
+    ) -> None:
+        self._config = config or TangleConfig()
+        self._clock = clock or time.monotonic
+        self._on_detection = on_detection
+
+        self._graph = WaitForGraph()
+        self._cycle_detector = CycleDetector(
+            self._graph, max_depth=self._config.max_cycle_length
+        )
+        self._livelock_detector = LivelockDetector(
+            window=self._config.livelock_window,
+            min_repeats=self._config.livelock_min_repeats,
+            min_pattern=self._config.livelock_min_pattern,
+            ring_size=self._config.livelock_ring_size,
+        )
+
+        self._detections: list[Detection] = []
+        self._lock = threading.RLock()
+        self._events_processed = 0
+
+        # Store
+        self._store = MemoryStore()
+
+        # Build resolver chain
+        self._resolver_chain = ResolverChain()
+        self._resolver_chain.add(AlertResolver(on_detection=on_detection))
+
+        resolution = self._config.resolution
+        if resolution in ("cancel_youngest", "cancel_all"):
+            from tangle.types import ResolutionAction
+
+            mode = (
+                ResolutionAction.CANCEL_ALL
+                if resolution == "cancel_all"
+                else ResolutionAction.CANCEL_YOUNGEST
+            )
+            self._resolver_chain.add(
+                CancelResolver(self._graph, cancel_fn=cancel_fn, mode=mode)
+            )
+        if resolution == "tiebreaker":
+            self._resolver_chain.add(
+                TiebreakerResolver(
+                    tiebreaker_fn=tiebreaker_fn,
+                    prompt=self._config.tiebreaker_prompt,
+                )
+            )
+        if resolution == "escalate":
+            self._resolver_chain.add(
+                EscalateResolver(
+                    webhook_url=self._config.escalation_webhook_url,
+                )
+            )
+
+        # Background scan
+        self._scan_thread: threading.Thread | None = None
+        self._stop_event = threading.Event()
+
+    def clock(self) -> float:
+        return self._clock()
+
+    # --- SDK hooks ---
+    def wait_for(
+        self,
+        workflow_id: str,
+        from_agent: AgentID,
+        to_agent: AgentID,
+        resource: str = "",
+    ) -> None:
+        self.process_event(
+            Event(
+                type=EventType.WAIT_FOR,
+                timestamp=self._clock(),
+                workflow_id=workflow_id,
+                from_agent=from_agent,
+                to_agent=to_agent,
+                resource=resource,
+            )
+        )
+
+    def release(self, workflow_id: str, from_agent: AgentID, to_agent: AgentID) -> None:
+        self.process_event(
+            Event(
+                type=EventType.RELEASE,
+                timestamp=self._clock(),
+                workflow_id=workflow_id,
+                from_agent=from_agent,
+                to_agent=to_agent,
+            )
+        )
+
+    def send(
+        self,
+        workflow_id: str,
+        from_agent: AgentID,
+        to_agent: AgentID,
+        body: bytes = b"",
+    ) -> None:
+        self.process_event(
+            Event(
+                type=EventType.SEND,
+                timestamp=self._clock(),
+                workflow_id=workflow_id,
+                from_agent=from_agent,
+                to_agent=to_agent,
+                message_body=body,
+            )
+        )
+
+    def register(self, workflow_id: str, agent_id: AgentID) -> None:
+        self.process_event(
+            Event(
+                type=EventType.REGISTER,
+                timestamp=self._clock(),
+                workflow_id=workflow_id,
+                from_agent=agent_id,
+            )
+        )
+
+    def complete(self, workflow_id: str, agent_id: AgentID) -> None:
+        self.process_event(
+            Event(
+                type=EventType.COMPLETE,
+                timestamp=self._clock(),
+                workflow_id=workflow_id,
+                from_agent=agent_id,
+            )
+        )
+
+    def cancel(self, workflow_id: str, agent_id: AgentID, reason: str = "") -> None:
+        self.process_event(
+            Event(
+                type=EventType.CANCEL,
+                timestamp=self._clock(),
+                workflow_id=workflow_id,
+                from_agent=agent_id,
+                resource=reason,
+            )
+        )
+
+    def report_progress(self, workflow_id: str, description: str = "") -> None:
+        self.process_event(
+            Event(
+                type=EventType.PROGRESS,
+                timestamp=self._clock(),
+                workflow_id=workflow_id,
+                from_agent="__system__",
+                resource=description,
+            )
+        )
+
+    # --- Core ---
+    def process_event(self, event: Event) -> Detection | None:
+        with self._lock:
+            self._events_processed += 1
+            self._store.record_event(event)
+
+            detection: Detection | None = None
+
+            if event.type == EventType.REGISTER:
+                self._graph.register_agent(
+                    event.from_agent, event.workflow_id, event.timestamp
+                )
+
+            elif event.type == EventType.WAIT_FOR:
+                edge = Edge(
+                    from_agent=event.from_agent,
+                    to_agent=event.to_agent,
+                    resource=event.resource,
+                    created_at=event.timestamp,
+                    workflow_id=event.workflow_id,
+                )
+                self._graph.add_edge(edge)
+                self._graph.set_state(event.from_agent, AgentStatus.WAITING)
+                cycle = self._cycle_detector.on_edge_added(edge)
+                if cycle:
+                    detection = Detection(
+                        type=DetectionType.DEADLOCK,
+                        severity=Severity.CRITICAL,
+                        cycle=cycle,
+                    )
+
+            elif event.type == EventType.RELEASE:
+                self._graph.remove_edge(event.from_agent, event.to_agent)
+                self._graph.set_state(event.from_agent, AgentStatus.ACTIVE)
+
+            elif event.type == EventType.SEND:
+                pattern = self._livelock_detector.on_message(
+                    from_agent=event.from_agent,
+                    to_agent=event.to_agent,
+                    body=event.message_body,
+                    workflow_id=event.workflow_id,
+                )
+                if pattern:
+                    detection = Detection(
+                        type=DetectionType.LIVELOCK,
+                        severity=Severity.CRITICAL,
+                        livelock=pattern,
+                    )
+
+            elif event.type == EventType.COMPLETE:
+                self._graph.set_state(event.from_agent, AgentStatus.COMPLETED)
+                # Remove all outgoing edges
+                for edge in self._graph.outgoing(event.from_agent):
+                    self._graph.remove_edge(event.from_agent, edge.to_agent)
+
+            elif event.type == EventType.CANCEL:
+                self._graph.set_state(event.from_agent, AgentStatus.CANCELED)
+                for edge in self._graph.outgoing(event.from_agent):
+                    self._graph.remove_edge(event.from_agent, edge.to_agent)
+
+            elif event.type == EventType.PROGRESS:
+                self._livelock_detector.report_progress(event.workflow_id)
+
+            if detection:
+                self._detections.append(detection)
+                self._store.record_detection(detection)
+                try:
+                    self._resolver_chain.resolve(detection)
+                except Exception:
+                    logger.exception("resolver_chain_failed")
+
+            return detection
+
+    # --- Inspection ---
+    def snapshot(self, workflow_id: str | None = None) -> GraphSnapshot:
+        if workflow_id:
+            agents = self._graph.agents_in_workflow(workflow_id)
+            all_edges = self._graph.all_edges()
+            wf_edges = [e for e in all_edges if e.workflow_id == workflow_id]
+            states = {}
+            for a in agents:
+                s = self._graph.get_state(a)
+                if s:
+                    states[a] = s
+            return GraphSnapshot(nodes=agents, edges=wf_edges, states=states)
+        return self._graph.snapshot()
+
+    def active_detections(self) -> list[Detection]:
+        with self._lock:
+            return [
+                d
+                for d in self._detections
+                if (d.cycle and not d.cycle.resolved)
+                or (d.livelock and not d.livelock.resolved)
+            ]
+
+    def stats(self) -> dict[str, int]:
+        with self._lock:
+            return {
+                "events_processed": self._events_processed,
+                "active_detections": len(self.active_detections()),
+                "graph_nodes": self._graph.node_count(),
+                "graph_edges": self._graph.edge_count(),
+            }
+
+    # --- Lifecycle ---
+    def start_background(self) -> None:
+        self._stop_event.clear()
+        self._scan_thread = threading.Thread(target=self._periodic_scan, daemon=True)
+        self._scan_thread.start()
+
+    def _periodic_scan(self) -> None:
+        while not self._stop_event.is_set():
+            self._stop_event.wait(self._config.cycle_check_interval)
+            if self._stop_event.is_set():
+                break
+            with self._lock:
+                cycles = self._cycle_detector.full_scan()
+                for cycle in cycles:
+                    # Check if already detected
+                    already = any(
+                        d.cycle
+                        and set(d.cycle.agents) == set(cycle.agents)
+                        and not d.cycle.resolved
+                        for d in self._detections
+                    )
+                    if not already:
+                        detection = Detection(
+                            type=DetectionType.DEADLOCK,
+                            severity=Severity.CRITICAL,
+                            cycle=cycle,
+                        )
+                        self._detections.append(detection)
+                        self._store.record_detection(detection)
+                        try:
+                            self._resolver_chain.resolve(detection)
+                        except Exception:
+                            logger.exception("periodic_resolver_failed")
+
+    def stop(self) -> None:
+        self._stop_event.set()
+        if self._scan_thread and self._scan_thread.is_alive():
+            self._scan_thread.join(timeout=5)
+
+    def reset_workflow(self, workflow_id: str) -> None:
+        with self._lock:
+            self._graph.clear_workflow(workflow_id)
+            self._livelock_detector.clear_workflow(workflow_id)
+            self._detections = [
+                d
+                for d in self._detections
+                if not (
+                    (d.cycle and d.cycle.workflow_id == workflow_id)
+                    or (d.livelock and d.livelock.workflow_id == workflow_id)
+                )
+            ]
+
+    def __enter__(self) -> "TangleMonitor":
+        self.start_background()
+        return self
+
+    def __exit__(self, *args: object) -> None:
+        self.stop()
