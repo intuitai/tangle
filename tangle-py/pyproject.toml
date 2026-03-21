@@ -2,7 +2,6 @@
 name = "tangle-detect"
 version = "0.1.0"
 description = "Agent workflow deadlock and livelock detection"
-readme = "README.md"
 license = "MIT"
 requires-python = ">=3.14"
 authors = [
