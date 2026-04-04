@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import threading
 
+import pytest
+
 from tangle.config import TangleConfig
 from tangle.monitor import TangleMonitor
 from tangle.types import (
@@ -779,3 +781,120 @@ class TestStopWithoutStart:
     def test_stop_without_start(self, monitor: TangleMonitor) -> None:
         """stop() is safe to call without a prior start_background()."""
         monitor.stop()  # Should not raise
+
+
+# ---------------------------------------------------------------------------
+# Periodic scan catches missed cycles (bypassing incremental detection)
+# ---------------------------------------------------------------------------
+
+
+class TestPeriodicScanCatchesMissed:
+    def test_periodic_check_catches_missed(self, fake_clock: FakeClock) -> None:
+        """Periodic scan catches a cycle injected directly into the graph,
+        bypassing process_event so incremental detection never fires."""
+        import time
+
+        config = TangleConfig(cycle_check_interval=0.1)
+        monitor = TangleMonitor(config=config, clock=fake_clock)
+
+        # Inject edges directly into the graph, bypassing process_event
+        from tangle.types import Edge
+
+        edge_ab = Edge(
+            from_agent="A",
+            to_agent="B",
+            resource="",
+            created_at=1.0,
+            workflow_id="wf-missed",
+        )
+        edge_ba = Edge(
+            from_agent="B",
+            to_agent="A",
+            resource="",
+            created_at=2.0,
+            workflow_id="wf-missed",
+        )
+        monitor._graph.register_agent("A", "wf-missed", 1.0)
+        monitor._graph.register_agent("B", "wf-missed", 2.0)
+        monitor._graph.add_edge(edge_ab)
+        monitor._graph.add_edge(edge_ba)
+
+        # No detection yet — incremental path was bypassed
+        assert len(monitor.active_detections()) == 0
+
+        monitor.start_background()
+        time.sleep(0.35)  # allow at least one periodic scan
+        monitor.stop()
+
+        assert len(monitor.active_detections()) >= 1
+        assert monitor.active_detections()[0].type == DetectionType.DEADLOCK
+
+
+# ---------------------------------------------------------------------------
+# Resolution retry — MockResolver failure keeps detection active
+# ---------------------------------------------------------------------------
+
+
+class TestResolutionRetry:
+    def test_resolution_retry(self, fake_clock: FakeClock) -> None:
+        """When the only resolver fails, the detection stays in active_detections."""
+        from tests.conftest import MockResolver
+
+        config = TangleConfig(cycle_check_interval=999_999.0)
+        mock = MockResolver()
+        mock.should_fail = True
+
+        monitor = TangleMonitor(config=config, clock=fake_clock)
+        # Replace the resolver chain with our failing mock
+        from tangle.resolver.chain import ResolverChain
+
+        chain = ResolverChain()
+        chain.add(mock)
+        monitor._resolver_chain = chain
+
+        monitor.register("wf-retry", "A")
+        monitor.register("wf-retry", "B")
+        monitor.wait_for("wf-retry", "A", "B")
+        monitor.wait_for("wf-retry", "B", "A")  # triggers deadlock
+
+        # Detection is recorded even though resolver failed
+        assert len(monitor.active_detections()) == 1
+        # MockResolver was called once
+        assert mock.count == 1  # detection appended before resolver raised
+
+
+# ---------------------------------------------------------------------------
+# OTel collector lifecycle
+# ---------------------------------------------------------------------------
+
+
+class TestOTelCollector:
+    @pytest.mark.integration
+    def test_otel_collector_starts_when_enabled(self, fake_clock: FakeClock) -> None:
+        """OTel collector starts a gRPC server when otel_enabled=True."""
+        import grpc
+
+        port = 14317  # high port unlikely to be in use
+        config = TangleConfig(
+            cycle_check_interval=999_999.0, otel_enabled=True, otel_port=port
+        )
+        monitor = TangleMonitor(config=config, clock=fake_clock)
+        monitor.start_background()
+        try:
+            channel = grpc.insecure_channel(f"localhost:{port}")
+            # Attempt a trivial connectivity check — the channel should be ready
+            future = grpc.channel_ready_future(channel)
+            future.result(timeout=3)
+            channel.close()
+        finally:
+            monitor.stop()
+
+    def test_otel_collector_skipped_when_disabled(self, fake_clock: FakeClock) -> None:
+        """OTel collector is None when otel_enabled=False (default)."""
+        config = TangleConfig(cycle_check_interval=999_999.0)
+        monitor = TangleMonitor(config=config, clock=fake_clock)
+        monitor.start_background()
+        try:
+            assert monitor._otel_collector is None
+        finally:
+            monitor.stop()

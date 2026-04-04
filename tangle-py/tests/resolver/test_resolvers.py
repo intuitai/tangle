@@ -354,7 +354,7 @@ class TestResolverChain:
 
         chain.resolve(detection)
 
-        assert first.count == 0  # Failed, so detection was not appended
+        assert first.count == 1  # detection appended before resolver raised
         assert second.count == 1
 
     def test_chain_resolver_all_fail(self) -> None:
@@ -403,7 +403,7 @@ class TestResolverChain:
 
         chain.resolve(detection)
 
-        assert first.count == 0
+        assert first.count == 1  # detection appended before resolver raised
         assert second.count == 1
         assert third.count == 0
 

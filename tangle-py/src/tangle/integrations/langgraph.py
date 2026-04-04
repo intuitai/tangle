@@ -1,5 +1,6 @@
 # src/tangle/integrations/langgraph.py
 
+import threading
 from collections.abc import Callable
 from functools import wraps
 from typing import Any
@@ -15,6 +16,7 @@ _TANGLE_KEYS = {"tangle_workflow_id"}
 def tangle_node(monitor: TangleMonitor, agent_id: AgentID):
     """Decorator that instruments a LangGraph node function."""
     _registered: set[str] = set()
+    _registered_lock = threading.Lock()
 
     def decorator(fn: Callable[..., Any]) -> Callable[..., Any]:
         @wraps(fn)
@@ -22,16 +24,17 @@ def tangle_node(monitor: TangleMonitor, agent_id: AgentID):
             workflow_id = state.get("tangle_workflow_id", "default")
             reg_key = f"{workflow_id}:{agent_id}"
 
-            if reg_key not in _registered:
-                monitor.process_event(
-                    Event(
-                        type=EventType.REGISTER,
-                        timestamp=monitor.clock(),
-                        workflow_id=workflow_id,
-                        from_agent=agent_id,
+            with _registered_lock:
+                if reg_key not in _registered:
+                    monitor.process_event(
+                        Event(
+                            type=EventType.REGISTER,
+                            timestamp=monitor.clock(),
+                            workflow_id=workflow_id,
+                            from_agent=agent_id,
+                        )
                     )
-                )
-                _registered.add(reg_key)
+                    _registered.add(reg_key)
 
             try:
                 result = fn(state, *args, **kwargs)
@@ -89,6 +92,15 @@ def tangle_conditional_edge(monitor: TangleMonitor, from_agent: AgentID):
                         from_agent=from_agent,
                         to_agent=result,
                         resource="conditional_edge",
+                    )
+                )
+                monitor.process_event(
+                    Event(
+                        type=EventType.RELEASE,
+                        timestamp=monitor.clock(),
+                        workflow_id=workflow_id,
+                        from_agent=from_agent,
+                        to_agent=result,
                     )
                 )
 
