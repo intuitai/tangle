@@ -121,10 +121,10 @@ class TestTangleNode:
 
 
 class TestTangleConditionalEdge:
-    def test_tangle_conditional_edge_emits_wait(
+    def test_tangle_conditional_edge_emits_wait_and_release(
         self, monitor: TangleMonitor, fake_clock: FakeClock
     ) -> None:
-        """Conditional edge emits a WaitFor to the selected target."""
+        """Conditional edge emits a WaitFor followed by a Release."""
 
         @tangle_conditional_edge(monitor, "router")
         def route(state: dict[str, Any]) -> str:
@@ -134,19 +134,24 @@ class TestTangleConditionalEdge:
         monitor.register("wf-1", "router")
         monitor.register("wf-1", "reviewer")
 
+        events_before = monitor.stats()["events_processed"]
+
         state = {"tangle_workflow_id": "wf-1"}
         result = route(state)
 
         assert result == "reviewer"
 
+        # Should have emitted 2 events: WAIT_FOR + RELEASE
+        assert monitor.stats()["events_processed"] == events_before + 2
+
+        # RELEASE removes the edge, so snapshot should have no edges
         snap = monitor.snapshot("wf-1")
         wait_edges = [
             e
             for e in snap.edges
             if e.from_agent == "router" and e.to_agent == "reviewer"
         ]
-        assert len(wait_edges) == 1
-        assert wait_edges[0].resource == "conditional_edge"
+        assert len(wait_edges) == 0
 
     def test_tangle_conditional_edge_skips_end(
         self, monitor: TangleMonitor, fake_clock: FakeClock
@@ -216,13 +221,14 @@ class TestTangleConditionalEdge:
         monitor.register("default", "router")
         monitor.register("default", "target")
 
+        events_before = monitor.stats()["events_processed"]
+
         state = {}  # No tangle_workflow_id
         result = route(state)
 
         assert result == "target"
-        snap = monitor.snapshot("default")
-        wait_edges = [e for e in snap.edges if e.from_agent == "router"]
-        assert len(wait_edges) == 1
+        # WAIT_FOR + RELEASE emitted
+        assert monitor.stats()["events_processed"] == events_before + 2
 
 
 # ---------------------------------------------------------------------------

@@ -57,9 +57,9 @@ class MockResolver:
         return self._detections[-1] if self._detections else None
 
     def resolve(self, detection: Detection) -> None:
+        self._detections.append(detection)
         if self.should_fail:
             raise RuntimeError("MockResolver forced failure")
-        self._detections.append(detection)
 
 
 # ---------------------------------------------------------------------------

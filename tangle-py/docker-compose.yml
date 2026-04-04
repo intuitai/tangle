@@ -1,0 +1,20 @@
+version: "3.9"
+
+services:
+  test-runner:
+    build:
+      context: .
+      dockerfile: Dockerfile.test
+    command: >
+      sh -c "
+        echo '=== Lint ===' &&
+        uv run ruff check src/ tests/ &&
+        echo '=== Type check ===' &&
+        uv run mypy src/tangle &&
+        echo '=== Unit tests ===' &&
+        uv run pytest tests/ -x --ignore=tests/integration --ignore=tests/benchmarks -v --timeout=30 &&
+        echo '=== Integration tests ===' &&
+        uv run pytest tests/integration/ -v --timeout=60 -m integration &&
+        echo '=== Coverage ===' &&
+        uv run pytest tests/ --ignore=tests/benchmarks --cov=tangle --cov-report=term-missing --cov-report=html
+      "

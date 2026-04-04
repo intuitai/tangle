@@ -17,6 +17,7 @@ from tangle.resolver.chain import ResolverChain
 from tangle.resolver.escalate import EscalateResolver
 from tangle.resolver.tiebreaker import TiebreakerResolver
 from tangle.store.memory import MemoryStore
+from tangle.store.sqlite import SQLiteStore
 from tangle.types import (
     AgentID,
     AgentStatus,
@@ -63,7 +64,10 @@ class TangleMonitor:
         self._events_processed = 0
 
         # Store
-        self._store = MemoryStore()
+        if self._config.store_backend == "sqlite":
+            self._store = SQLiteStore(self._config.sqlite_path)
+        else:
+            self._store = MemoryStore()
 
         # Build resolver chain
         self._resolver_chain = ResolverChain()
@@ -98,6 +102,7 @@ class TangleMonitor:
         # Background scan
         self._scan_thread: threading.Thread | None = None
         self._stop_event = threading.Event()
+        self._otel_collector = None
 
     def clock(self) -> float:
         return self._clock()
@@ -267,17 +272,18 @@ class TangleMonitor:
 
     # --- Inspection ---
     def snapshot(self, workflow_id: str | None = None) -> GraphSnapshot:
-        if workflow_id:
-            agents = self._graph.agents_in_workflow(workflow_id)
-            all_edges = self._graph.all_edges()
-            wf_edges = [e for e in all_edges if e.workflow_id == workflow_id]
-            states = {}
-            for a in agents:
-                s = self._graph.get_state(a)
-                if s:
-                    states[a] = s
-            return GraphSnapshot(nodes=agents, edges=wf_edges, states=states)
-        return self._graph.snapshot()
+        with self._lock:
+            if workflow_id:
+                agents = self._graph.agents_in_workflow(workflow_id)
+                all_edges = self._graph.all_edges()
+                wf_edges = [e for e in all_edges if e.workflow_id == workflow_id]
+                states = {}
+                for a in agents:
+                    s = self._graph.get_state(a)
+                    if s:
+                        states[a] = s
+                return GraphSnapshot(nodes=agents, edges=wf_edges, states=states)
+            return self._graph.snapshot()
 
     def active_detections(self) -> list[Detection]:
         with self._lock:
@@ -302,6 +308,11 @@ class TangleMonitor:
         self._stop_event.clear()
         self._scan_thread = threading.Thread(target=self._periodic_scan, daemon=True)
         self._scan_thread.start()
+        if self._config.otel_enabled:
+            from tangle.integrations.otel import OTelCollector
+
+            self._otel_collector = OTelCollector(self, self._config.otel_port)
+            self._otel_collector.start()
 
     def _periodic_scan(self) -> None:
         while not self._stop_event.is_set():
@@ -332,6 +343,8 @@ class TangleMonitor:
                             logger.exception("periodic_resolver_failed")
 
     def stop(self) -> None:
+        if self._otel_collector is not None:
+            self._otel_collector.stop()
         self._stop_event.set()
         if self._scan_thread and self._scan_thread.is_alive():
             self._scan_thread.join(timeout=5)

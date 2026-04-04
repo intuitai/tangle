@@ -1,7 +1,5 @@
 # src/tangle/graph/wfg.py
 
-from __future__ import annotations
-
 import threading
 from collections import defaultdict
 from typing import TYPE_CHECKING
