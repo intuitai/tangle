@@ -22,12 +22,18 @@ class TestServerE2E:
         app = create_app(monitor)
 
         transport = httpx.ASGITransport(app=app)
-        async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        async with httpx.AsyncClient(
+            transport=transport, base_url="http://test"
+        ) as client:
             # Register agents
             for agent in ["A", "B"]:
                 resp = await client.post(
                     "/v1/events",
-                    json={"type": "register", "workflow_id": "wf-1", "from_agent": agent},
+                    json={
+                        "type": "register",
+                        "workflow_id": "wf-1",
+                        "from_agent": agent,
+                    },
                 )
                 assert resp.status_code == 202
 
@@ -81,7 +87,9 @@ class TestServerE2E:
         monitor = TangleMonitor()
         app = create_app(monitor)
         transport = httpx.ASGITransport(app=app)
-        async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        async with httpx.AsyncClient(
+            transport=transport, base_url="http://test"
+        ) as client:
             resp = await client.get("/healthz")
             assert resp.status_code == 200
             assert resp.json()["status"] == "ok"
@@ -95,7 +103,9 @@ class TestServerE2E:
         )
         app = create_app(monitor)
         transport = httpx.ASGITransport(app=app)
-        async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        async with httpx.AsyncClient(
+            transport=transport, base_url="http://test"
+        ) as client:
             resp = await client.post(
                 "/v1/events/batch",
                 json={

@@ -51,7 +51,10 @@ class TestLangGraphE2E:
         @tangle_node(monitor, agent_id="reviewer")
         def reviewer(state):
             clock.advance(1)
-            return {"feedback": "needs work", "iteration": state.get("iteration", 0) + 1}
+            return {
+                "feedback": "needs work",
+                "iteration": state.get("iteration", 0) + 1,
+            }
 
         @tangle_conditional_edge(monitor, from_agent="reviewer")
         def should_continue(state):
@@ -69,19 +72,21 @@ class TestLangGraphE2E:
         graph.add_conditional_edges("reviewer", should_continue)
 
         app = graph.compile()
-        app.invoke({
-            "tangle_workflow_id": "wf-e2e-1",
-            "research": "",
-            "draft": "",
-            "feedback": "",
-            "iteration": 0,
-        })
+        app.invoke(
+            {
+                "tangle_workflow_id": "wf-e2e-1",
+                "research": "",
+                "draft": "",
+                "feedback": "",
+                "iteration": 0,
+            }
+        )
 
         # After many iterations, livelock should be detected
         detections = monitor.active_detections()
-        assert any(d.type.value == "livelock" for d in detections), (
-            f"Expected livelock detection, got {len(detections)} detections"
-        )
+        assert any(
+            d.type.value == "livelock" for d in detections
+        ), f"Expected livelock detection, got {len(detections)} detections"
 
     def test_deadlock_via_conditional_edges(self):
         """Two nodes with conditional edges pointing at each other creating WaitFor cycle."""
@@ -94,7 +99,9 @@ class TestLangGraphE2E:
         monitor.register(workflow_id="wf-dl", agent_id="A")
         monitor.register(workflow_id="wf-dl", agent_id="B")
         clock.advance(1)
-        monitor.wait_for(workflow_id="wf-dl", from_agent="A", to_agent="B", resource="data")
+        monitor.wait_for(
+            workflow_id="wf-dl", from_agent="A", to_agent="B", resource="data"
+        )
         clock.advance(1)
         detection = monitor.process_event(
             Event(

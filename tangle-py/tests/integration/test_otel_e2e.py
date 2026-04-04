@@ -1,4 +1,5 @@
 """OTel E2E integration test: OTLP spans via gRPC → Tangle detects deadlock."""
+
 import time
 
 import pytest

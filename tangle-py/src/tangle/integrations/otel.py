@@ -22,7 +22,9 @@ except ImportError:
     _GRPC_AVAILABLE = False
 
 _ServerType = grpc.Server if _GRPC_AVAILABLE else object
-_BASE_SERVICER: type = trace_service_pb2_grpc.TraceServiceServicer if _GRPC_AVAILABLE else object
+_BASE_SERVICER: type = (
+    trace_service_pb2_grpc.TraceServiceServicer if _GRPC_AVAILABLE else object
+)
 
 logger = structlog.get_logger("tangle.otel")
 
