@@ -1,5 +1,10 @@
 # Tangle
 
+[![Tests](https://github.com/intuitai/tangle/actions/workflows/tests.yml/badge.svg)](https://github.com/intuitai/tangle/actions/workflows/tests.yml)
+[![Python 3.14+](https://img.shields.io/badge/python-3.14%2B-blue.svg)](https://www.python.org/downloads/)
+[![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
+[![Coverage](https://img.shields.io/badge/coverage-98%25-brightgreen.svg)](#running-tests)
+
 Deadlock and livelock detection for multi-agent AI workflows.
 
 Tangle monitors agent interactions in real time, detects when agents are stuck
@@ -298,25 +303,24 @@ uv run pytest -m "not slow and not integration"
 
 ### Test suite overview
 
-The test suite contains **210 tests** across 16 test files:
+The test suite contains **210 tests** across 14 test files:
 
 | Area               | File(s)                             | Tests | What is covered                                       |
 |--------------------|-------------------------------------|-------|-------------------------------------------------------|
-| Monitor            | `test_monitor.py`                   | 26    | Deadlock/livelock detection, SDK hooks, resolver wiring, periodic scan, concurrency |
-| Types              | `test_types.py`                     | 11    | Event immutability, enum values, Cycle/Edge/LivelockPattern/Detection fields |
-| Config             | `test_config.py`                    | 11    | Defaults, resolution field, boundary validation, store backend |
+| Monitor            | `test_monitor.py`                   | 29    | Deadlock/livelock detection, SDK hooks, resolver wiring, periodic scan, concurrency |
+| Types              | `test_types.py`                     | 14    | Event immutability, enum values, Cycle/Edge/LivelockPattern/Detection fields |
+| Config             | `test_config.py`                    | 14    | Defaults, resolution field, boundary validation, store backend |
 | CLI                | `test_cli.py`                       | 4     | Argument parsing, server startup, graceful shutdown    |
 | Cycle detector     | `detector/test_cycle.py`            | 19    | Incremental DFS, Kahn's full scan, depth limits, concurrency, Hypothesis property tests |
-| Livelock detector  | `detector/test_livelock.py`         | 19    | RingBuffer operations, pattern matching, progress reset, multi-pair isolation |
-| Wait-For Graph     | `graph/test_wfg.py`                 | 21    | Edge add/remove, agent registration, state transitions, workflow clear, concurrency |
-| Graph snapshot     | `graph/test_snapshot.py`            | 8     | JSON/DOT serialization, round-trip, error handling     |
-| Resolvers          | `resolver/test_resolvers.py`        | 23    | Alert, cancel, tiebreaker, escalate resolvers; chain fallback; bearer token; edge cases |
+| Livelock detector  | `detector/test_livelock.py`         | 21    | RingBuffer operations, pattern matching, progress reset, multi-pair isolation |
+| Wait-For Graph     | `graph/test_wfg.py`                 | 22    | Edge add/remove, agent registration, state transitions, workflow clear, concurrency |
+| Graph snapshot     | `graph/test_snapshot.py`            | 9     | JSON/DOT serialization, round-trip, error handling     |
+| Resolvers          | `resolver/test_resolvers.py`        | 34    | Alert, cancel, tiebreaker, escalate resolvers; chain fallback; bearer token; edge cases |
 | Server routes      | `server/test_routes.py`             | 14    | All REST endpoints, error paths, batch detection, livelock serialization |
-| Memory store       | `store/test_memory.py`              | 1     | Conformance suite                                     |
-| SQLite store       | `store/test_sqlite.py`              | 1     | Conformance suite                                     |
-| Store conformance  | `store/conformance.py`              | 9     | Shared tests: CRUD, limits, livelock round-trip, stats, idempotent close |
-| LangGraph          | `integrations/test_langgraph.py`    | 12    | Node/edge decorators, default workflow, non-dict returns, args forwarding |
-| OpenTelemetry      | `integrations/test_otel.py`         | 14    | Span parsing for all 7 event types, int_value extraction, invalid hex, missing attributes |
+| Memory store       | `store/test_memory.py`              | 1     | Conformance suite (shared via `store/conformance.py`)  |
+| SQLite store       | `store/test_sqlite.py`              | 1     | Conformance suite (shared via `store/conformance.py`)  |
+| LangGraph          | `integrations/test_langgraph.py`    | 13    | Node/edge decorators, default workflow, non-dict returns, args forwarding |
+| OpenTelemetry      | `integrations/test_otel.py`         | 15    | Span parsing for all 7 event types, int_value extraction, invalid hex, missing attributes |
 
 ### Linting and formatting
 
