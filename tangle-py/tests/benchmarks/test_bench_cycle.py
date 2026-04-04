@@ -1,11 +1,10 @@
 """Benchmarks for cycle detection and related operations."""
-import pytest
-from tangle.graph.wfg import WaitForGraph
+from tangle.config import TangleConfig
 from tangle.detector.cycle import CycleDetector
 from tangle.detector.livelock import LivelockDetector, RingBuffer
-from tangle.types import Edge, Event, EventType
+from tangle.graph.wfg import WaitForGraph
 from tangle.monitor import TangleMonitor
-from tangle.config import TangleConfig
+from tangle.types import Edge, Event, EventType
 
 
 def _build_chain(n: int, max_depth: int | None = None) -> tuple[WaitForGraph, CycleDetector, Edge]:

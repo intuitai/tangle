@@ -1,6 +1,7 @@
 """OTel E2E integration test: OTLP spans via gRPC → Tangle detects deadlock."""
-import pytest
 import time
+
+import pytest
 
 
 @pytest.mark.integration
@@ -13,8 +14,8 @@ class TestOTelE2E:
                 trace_service_pb2,
                 trace_service_pb2_grpc,
             )
-            from opentelemetry.proto.trace.v1 import trace_pb2
             from opentelemetry.proto.common.v1 import common_pb2
+            from opentelemetry.proto.trace.v1 import trace_pb2
         except ImportError:
             pytest.skip("gRPC/OTel dependencies not available")
 
@@ -23,7 +24,7 @@ class TestOTelE2E:
         except ImportError:
             pytest.skip("OTelCollector not yet implemented")
 
-        from tangle import TangleMonitor, TangleConfig
+        from tangle import TangleConfig, TangleMonitor
 
         port = 14317  # Use non-standard port for testing
         monitor = TangleMonitor(

@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import pytest
 
-from tangle import TangleMonitor, TangleConfig
-from tangle.types import ResolutionAction, Detection
+from tangle import TangleConfig, TangleMonitor
+from tangle.types import Detection, ResolutionAction
 from tests.conftest import FakeClock
 
 

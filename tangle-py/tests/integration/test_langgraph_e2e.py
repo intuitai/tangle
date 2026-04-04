@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-import pytest
 from typing import TypedDict
 
-from langgraph.graph import StateGraph, END
+import pytest
+from langgraph.graph import END, StateGraph
 
-from tangle import TangleMonitor, TangleConfig
-from tangle.integrations.langgraph import tangle_node, tangle_conditional_edge
+from tangle import TangleConfig, TangleMonitor
+from tangle.integrations.langgraph import tangle_conditional_edge, tangle_node
 from tangle.types import Event, EventType
 from tests.conftest import FakeClock
 

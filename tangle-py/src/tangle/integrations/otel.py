@@ -10,10 +10,6 @@ from tangle.types import Event, EventType
 if TYPE_CHECKING:
     from tangle.monitor import TangleMonitor
 
-    _ServerType = grpc.Server
-else:
-    _ServerType = object
-
 try:
     import grpc
     from opentelemetry.proto.collector.trace.v1 import (
@@ -25,6 +21,7 @@ try:
 except ImportError:
     _GRPC_AVAILABLE = False
 
+_ServerType = grpc.Server if _GRPC_AVAILABLE else object
 _BASE_SERVICER: type = trace_service_pb2_grpc.TraceServiceServicer if _GRPC_AVAILABLE else object
 
 logger = structlog.get_logger("tangle.otel")

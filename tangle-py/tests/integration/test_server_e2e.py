@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-import pytest
 import httpx
+import pytest
 
-from tangle import TangleMonitor, TangleConfig
+from tangle import TangleConfig, TangleMonitor
 from tangle.server.app import create_app
 from tests.conftest import FakeClock
 
