@@ -26,7 +26,7 @@ jobs:
           allow-prereleases: true
 
       - name: Install dependencies
-        run: uv sync --all-extras
+        run: uv sync --all-extras --group dev
 
       - name: Lint with ruff
         run: uv run ruff check src/ tests/
