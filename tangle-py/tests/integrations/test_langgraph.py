@@ -115,6 +115,39 @@ class TestTangleNode:
         assert monitor.stats()["events_processed"] == 2
 
 
+
+    def test_tangle_node_reregisters_after_reset_workflow(
+        self, monitor: TangleMonitor, fake_clock: FakeClock
+    ) -> None:
+        """After reset_workflow(), calling the node again re-registers the agent."""
+
+        @tangle_node(monitor, "resettable")
+        def resettable_node(state: dict[str, Any]) -> dict[str, Any]:
+            return {}
+
+        state = {"tangle_workflow_id": "wf-reset"}
+        resettable_node(state)
+
+        # Agent should be registered
+        snap = monitor.snapshot("wf-reset")
+        assert "resettable" in snap.nodes
+
+        events_after_first_run = monitor.stats()["events_processed"]
+
+        # Reset the workflow — this clears the graph state
+        monitor.reset_workflow("wf-reset")
+        snap_after_reset = monitor.snapshot("wf-reset")
+        assert "resettable" not in snap_after_reset.nodes
+
+        # Call the node again — should re-register since the graph no longer knows about it
+        resettable_node(state)
+        events_after_second_run = monitor.stats()["events_processed"]
+
+        # A new REGISTER event should have been emitted
+        assert events_after_second_run > events_after_first_run
+        snap_final = monitor.snapshot("wf-reset")
+        assert "resettable" in snap_final.nodes
+
 # ---------------------------------------------------------------------------
 # tangle_conditional_edge decorator
 # ---------------------------------------------------------------------------

@@ -1,5 +1,7 @@
 # src/tangle/detector/cycle.py
 
+from collections import deque
+
 from tangle.graph.wfg import WaitForGraph
 from tangle.types import AgentID, Cycle, Edge
 
@@ -27,7 +29,9 @@ class CycleDetector:
                 workflow_id=edge.workflow_id,
             )
 
-        # DFS from start looking for target
+        workflow_id = edge.workflow_id
+
+        # DFS from start looking for target — restricted to the same workflow
         visited: set[AgentID] = set()
         path: list[AgentID] = []
 
@@ -40,7 +44,7 @@ class CycleDetector:
                 return False
             visited.add(node)
             path.append(node)
-            for out_edge in self._graph.outgoing(node):
+            for out_edge in self._graph.outgoing(node, workflow_id=workflow_id):
                 if dfs(out_edge.to_agent, depth + 1):
                     return True
             path.pop()
@@ -59,7 +63,7 @@ class CycleDetector:
             for i in range(len(path)):
                 src = path[i]
                 dst = path[i + 1] if i + 1 < len(path) else target
-                for out_edge in self._graph.outgoing(src):
+                for out_edge in self._graph.outgoing(src, workflow_id=workflow_id):
                     if out_edge.to_agent == dst:
                         cycle_edges.append(out_edge)
                         break
@@ -73,68 +77,78 @@ class CycleDetector:
 
     def full_scan(self) -> list[Cycle]:
         """
-        Kahn's algorithm on the full graph.
-        Nodes not in topological order are in cycles.
+        Kahn's algorithm run per-workflow to avoid cross-workflow false positives.
+        Nodes not in topological order within their workflow are in cycles.
         """
         all_edges = self._graph.all_edges()
-        all_nodes = self._graph.all_nodes()
 
-        if not all_nodes:
-            return []
-
-        # Build adjacency and in-degree
-        in_degree: dict[AgentID, int] = {n: 0 for n in all_nodes}
-        adj: dict[AgentID, list[AgentID]] = {n: [] for n in all_nodes}
-        edge_map: dict[tuple[AgentID, AgentID], Edge] = {}
-
+        # Group edges and nodes by workflow
+        workflow_edges: dict[str, list[Edge]] = {}
+        workflow_nodes: dict[str, set[AgentID]] = {}
         for edge in all_edges:
-            if edge.from_agent in in_degree and edge.to_agent in in_degree:
-                adj[edge.from_agent].append(edge.to_agent)
-                in_degree[edge.to_agent] += 1
-                edge_map[(edge.from_agent, edge.to_agent)] = edge
+            wf = edge.workflow_id
+            workflow_edges.setdefault(wf, []).append(edge)
+            workflow_nodes.setdefault(wf, set()).add(edge.from_agent)
+            workflow_nodes.setdefault(wf, set()).add(edge.to_agent)
 
-        # Kahn's
-        queue: list[AgentID] = [n for n, d in in_degree.items() if d == 0]
-        topo_order: list[AgentID] = []
-
-        while queue:
-            node = queue.pop(0)
-            topo_order.append(node)
-            for neighbor in adj[node]:
-                in_degree[neighbor] -= 1
-                if in_degree[neighbor] == 0:
-                    queue.append(neighbor)
-
-        # Nodes not in topo_order are in cycles
-        cycle_nodes = set(all_nodes) - set(topo_order)
-        if not cycle_nodes:
-            return []
-
-        # Trace exact cycles via DFS among cycle nodes
+        # Registered-only nodes (no edges) cannot be in a cycle, so only
+        # edge-participating nodes need scanning.
         cycles: list[Cycle] = []
-        visited: set[AgentID] = set()
 
-        for start_node in cycle_nodes:
-            if start_node in visited:
+        for wf_id, edges in workflow_edges.items():
+            nodes = list(workflow_nodes.get(wf_id, set()))
+            if not nodes:
                 continue
-            # DFS to find cycle from start_node
-            cycle_path = self._trace_cycle(start_node, cycle_nodes, adj)
-            if cycle_path:
-                cycle_edges: list[Edge] = []
-                for i in range(len(cycle_path)):
-                    src = cycle_path[i]
-                    dst = cycle_path[(i + 1) % len(cycle_path)]
-                    if (src, dst) in edge_map:
-                        cycle_edges.append(edge_map[(src, dst)])
-                wf = cycle_edges[0].workflow_id if cycle_edges else ""
-                cycles.append(
-                    Cycle(
-                        agents=cycle_path,
-                        edges=cycle_edges,
-                        workflow_id=wf,
+
+            # Build adjacency and in-degree within this workflow only
+            in_degree: dict[AgentID, int] = {n: 0 for n in nodes}
+            adj: dict[AgentID, list[AgentID]] = {n: [] for n in nodes}
+            edge_map: dict[tuple[AgentID, AgentID], Edge] = {}
+
+            for edge in edges:
+                if edge.from_agent in in_degree and edge.to_agent in in_degree:
+                    adj[edge.from_agent].append(edge.to_agent)
+                    in_degree[edge.to_agent] += 1
+                    edge_map[(edge.from_agent, edge.to_agent)] = edge
+
+            # Kahn's topological sort
+            queue: deque[AgentID] = deque(n for n, d in in_degree.items() if d == 0)
+            topo_order: list[AgentID] = []
+
+            while queue:
+                node = queue.popleft()
+                topo_order.append(node)
+                for neighbor in adj[node]:
+                    in_degree[neighbor] -= 1
+                    if in_degree[neighbor] == 0:
+                        queue.append(neighbor)
+
+            # Nodes not in topo_order are in cycles
+            cycle_nodes = set(nodes) - set(topo_order)
+            if not cycle_nodes:
+                continue
+
+            # Trace exact cycles via DFS among cycle nodes
+            visited: set[AgentID] = set()
+            for start_node in cycle_nodes:
+                if start_node in visited:
+                    continue
+                cycle_path = self._trace_cycle(start_node, cycle_nodes, adj)
+                if cycle_path:
+                    cycle_edges: list[Edge] = []
+                    for i in range(len(cycle_path)):
+                        src = cycle_path[i]
+                        dst = cycle_path[(i + 1) % len(cycle_path)]
+                        if (src, dst) in edge_map:
+                            cycle_edges.append(edge_map[(src, dst)])
+                    cycles.append(
+                        Cycle(
+                            agents=cycle_path,
+                            edges=cycle_edges,
+                            workflow_id=wf_id,
+                        )
                     )
-                )
-                visited.update(cycle_path)
+                    visited.update(cycle_path)
 
         return cycles
 

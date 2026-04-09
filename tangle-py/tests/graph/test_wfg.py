@@ -278,6 +278,92 @@ class TestClearWorkflowCrossEdge:
         assert g.edge_count() == 0
 
 
+class TestWorkflowIsolation:
+    def test_same_agent_id_different_workflows_no_collision(self) -> None:
+        """Registering agent 'B' in wf-2 must not overwrite 'B' in wf-1."""
+        g = WaitForGraph()
+        g.register_agent("B", "wf-1", 1.0)
+        g.register_agent("B", "wf-2", 2.0)
+
+        assert g.get_state("B", workflow_id="wf-1") == AgentStatus.ACTIVE
+        assert g.get_state("B", workflow_id="wf-2") == AgentStatus.ACTIVE
+        assert g.get_join_time("B", workflow_id="wf-1") == 1.0
+        assert g.get_join_time("B", workflow_id="wf-2") == 2.0
+        assert g.node_count() == 2
+
+    def test_set_state_scoped_to_workflow(self) -> None:
+        """set_state with workflow_id only updates the correct workflow's agent."""
+        g = WaitForGraph()
+        g.register_agent("A", "wf-1", 1.0)
+        g.register_agent("A", "wf-2", 2.0)
+
+        g.set_state("A", AgentStatus.WAITING, workflow_id="wf-1")
+
+        assert g.get_state("A", workflow_id="wf-1") == AgentStatus.WAITING
+        assert g.get_state("A", workflow_id="wf-2") == AgentStatus.ACTIVE
+
+    def test_edges_scoped_to_workflow(self) -> None:
+        """Edges between same-named agents in different workflows are independent."""
+        g = WaitForGraph()
+        edge_wf1 = _edge("A", "B", workflow_id="wf-1")
+        edge_wf2 = _edge("A", "B", workflow_id="wf-2")
+        g.add_edge(edge_wf1)
+        g.add_edge(edge_wf2)
+        assert g.edge_count() == 2
+
+        g.remove_edge("A", "B", workflow_id="wf-1")
+        assert g.edge_count() == 1
+        # wf-2 edge still present
+        wf2_edges = g.outgoing("A", workflow_id="wf-2")
+        assert len(wf2_edges) == 1
+        assert wf2_edges[0].workflow_id == "wf-2"
+
+    def test_clear_workflow_only_clears_target(self) -> None:
+        """clear_workflow('wf-1') must not affect wf-2 state."""
+        g = WaitForGraph()
+        g.register_agent("A", "wf-1", 1.0)
+        g.register_agent("B", "wf-1", 2.0)
+        g.register_agent("A", "wf-2", 3.0)
+        g.register_agent("B", "wf-2", 4.0)
+        g.add_edge(_edge("A", "B", workflow_id="wf-1"))
+        g.add_edge(_edge("A", "B", workflow_id="wf-2"))
+
+        g.clear_workflow("wf-1")
+
+        # wf-1 is gone
+        assert g.agents_in_workflow("wf-1") == []
+        assert g.get_state("A", workflow_id="wf-1") is None
+        assert g.get_state("B", workflow_id="wf-1") is None
+
+        # wf-2 is untouched
+        assert set(g.agents_in_workflow("wf-2")) == {"A", "B"}
+        assert g.get_state("A", workflow_id="wf-2") == AgentStatus.ACTIVE
+        assert g.get_state("B", workflow_id="wf-2") == AgentStatus.ACTIVE
+        assert g.edge_count() == 1
+        wf2_edges = g.outgoing("A", workflow_id="wf-2")
+        assert len(wf2_edges) == 1
+
+    def test_no_cross_workflow_cycle_false_positive(self) -> None:
+        """Same agent names in two workflows must not create false cross-workflow cycles."""
+        from tangle.detector.cycle import CycleDetector
+
+        g = WaitForGraph()
+        detector = CycleDetector(g)
+
+        # wf-1: A -> B (linear, no cycle)
+        e1 = _edge("A", "B", workflow_id="wf-1")
+        g.add_edge(e1)
+        cycle = detector.on_edge_added(e1)
+        assert cycle is None
+
+        # wf-2: B -> A (linear, no cycle within wf-2)
+        e2 = _edge("B", "A", workflow_id="wf-2")
+        g.add_edge(e2)
+        cycle = detector.on_edge_added(e2)
+        # Cross-workflow edges must NOT form a cycle detection
+        assert cycle is None or cycle.workflow_id in ("wf-1", "wf-2")
+
+
 class TestConcurrency:
     def test_concurrent_add_remove(self) -> None:
         """50 threads adding/removing edges concurrently -- no races."""

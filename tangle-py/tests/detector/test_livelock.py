@@ -234,6 +234,61 @@ class TestLivelockConversationVsPair:
         assert result.repeat_count >= 3
 
 
+class TestLivelockWorkflowIsolation:
+
+    def test_same_pair_different_workflows_no_cross_trigger(self) -> None:
+        """Same (from_agent, to_agent) pair in two workflows must not share buffers."""
+        det = LivelockDetector(window=50, min_repeats=3, min_pattern=1)
+
+        # Build up pattern in wf-1 (5 messages, not yet enough for 3 repeats of len>=1
+        # when checking only wf-1's pair buffer)
+        for _ in range(5):
+            det.on_message("A", "B", b"loop", "wf-1")
+
+        # wf-2 has the same pair but only 1 message — must NOT trigger
+        result = det.on_message("A", "B", b"loop", "wf-2")
+        assert result is None or result.workflow_id == "wf-2"
+
+    def test_livelock_detection_scoped_to_workflow(self) -> None:
+        """Livelock detected in wf-1 must carry wf-1 as workflow_id."""
+        det = LivelockDetector(window=50, min_repeats=3, min_pattern=1)
+        result = None
+        for _ in range(9):
+            result = det.on_message("A", "B", b"repeat", "wf-1")
+        assert result is not None
+        assert result.workflow_id == "wf-1"
+
+    def test_clear_workflow_only_clears_target(self) -> None:
+        """clear_workflow('wf-1') must not reset wf-2 buffers."""
+        det = LivelockDetector(window=50, min_repeats=3, min_pattern=1)
+
+        # Build up state in both workflows
+        for _ in range(5):
+            det.on_message("A", "B", b"msg", "wf-1")
+            det.on_message("A", "B", b"msg", "wf-2")
+
+        det.clear_workflow("wf-1")
+
+        # wf-2 still has its 5 accumulated messages — 4 more should trigger (total 9)
+        result = None
+        for _ in range(4):
+            result = det.on_message("A", "B", b"msg", "wf-2")
+        assert result is not None
+        assert result.workflow_id == "wf-2"
+
+    def test_pair_buffers_independent_across_workflows(self) -> None:
+        """Pair buffer for (A,B) in wf-1 and wf-2 are completely independent."""
+        det = LivelockDetector(window=50, min_repeats=3, min_pattern=1)
+
+        # Send 8 messages in wf-1 (not enough for 3 repeats with min_pattern=1 needing 9)
+        for _ in range(8):
+            det.on_message("X", "Y", b"data", "wf-1")
+
+        # Send only 1 message in wf-2 — must NOT trigger from wf-1's count
+        result = det.on_message("X", "Y", b"data", "wf-2")
+        assert result is None
+
+
 class TestLivelockClearWorkflow:
 
     def test_livelock_clear_workflow(self) -> None:

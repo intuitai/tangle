@@ -9,13 +9,13 @@ router = APIRouter()
 
 
 class EventRequest(BaseModel):
-    type: str
+    type: EventType  # Pydantic validates and returns 422 for unknown event types
     workflow_id: str
     from_agent: str
     to_agent: str = ""
     resource: str = ""
     message_body: str = ""  # hex-encoded
-    timestamp: float = 0.0
+    timestamp: float | None = None
 
 
 class BatchEventRequest(BaseModel):
@@ -23,14 +23,13 @@ class BatchEventRequest(BaseModel):
 
 
 def _to_event(req: EventRequest, monitor) -> Event:
-    evt_type = EventType(req.type)
     try:
         body = bytes.fromhex(req.message_body) if req.message_body else b""
     except ValueError:
         body = req.message_body.encode() if req.message_body else b""
     return Event(
-        type=evt_type,
-        timestamp=req.timestamp or monitor.clock(),
+        type=req.type,
+        timestamp=req.timestamp if req.timestamp is not None else monitor.clock(),
         workflow_id=req.workflow_id,
         from_agent=req.from_agent,
         to_agent=req.to_agent,

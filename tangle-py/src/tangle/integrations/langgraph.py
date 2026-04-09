@@ -1,6 +1,5 @@
 # src/tangle/integrations/langgraph.py
 
-import threading
 from collections.abc import Callable
 from functools import wraps
 from typing import Any
@@ -15,26 +14,23 @@ _TANGLE_KEYS = {"tangle_workflow_id"}
 
 def tangle_node(monitor: TangleMonitor, agent_id: AgentID):
     """Decorator that instruments a LangGraph node function."""
-    _registered: set[str] = set()
-    _registered_lock = threading.Lock()
 
     def decorator(fn: Callable[..., Any]) -> Callable[..., Any]:
         @wraps(fn)
         def wrapper(state: dict[str, Any], *args: Any, **kwargs: Any) -> dict[str, Any]:
             workflow_id = state.get("tangle_workflow_id", "default")
-            reg_key = f"{workflow_id}:{agent_id}"
 
-            with _registered_lock:
-                if reg_key not in _registered:
-                    monitor.process_event(
-                        Event(
-                            type=EventType.REGISTER,
-                            timestamp=monitor.clock(),
-                            workflow_id=workflow_id,
-                            from_agent=agent_id,
-                        )
+            # Check the graph's live state rather than a local cache so that
+            # reset_workflow() invalidation is automatically reflected here.
+            if agent_id not in monitor.snapshot(workflow_id).nodes:
+                monitor.process_event(
+                    Event(
+                        type=EventType.REGISTER,
+                        timestamp=monitor.clock(),
+                        workflow_id=workflow_id,
+                        from_agent=agent_id,
                     )
-                    _registered.add(reg_key)
+                )
 
             try:
                 result = fn(state, *args, **kwargs)

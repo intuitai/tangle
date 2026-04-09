@@ -17,6 +17,10 @@ class AlertResolver:
     def name(self) -> str:
         return "alert"
 
+    @property
+    def is_notification(self) -> bool:
+        return True
+
     def resolve(self, detection: Detection) -> None:
         logger.warning(
             "detection_alert",

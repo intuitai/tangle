@@ -25,6 +25,10 @@ class CancelResolver:
     def name(self) -> str:
         return "cancel"
 
+    @property
+    def is_notification(self) -> bool:
+        return False
+
     def resolve(self, detection: Detection) -> None:
         if not self._cancel_fn:
             logger.info("cancel_resolver_skip", reason="no cancel_fn provided")

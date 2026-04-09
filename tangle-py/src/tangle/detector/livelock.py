@@ -68,7 +68,8 @@ class LivelockDetector:
         self._min_repeats = min_repeats
         self._min_pattern = min_pattern
         self._ring_size = ring_size
-        self._pair_buffers: dict[tuple[AgentID, AgentID], RingBuffer] = {}
+        # Keyed by (workflow_id, from_agent, to_agent) for isolation across workflows
+        self._pair_buffers: dict[tuple[str, AgentID, AgentID], RingBuffer] = {}
         self._conversation_buffers: dict[str, RingBuffer] = {}
         self._pair_agents: dict[str, set[tuple[AgentID, AgentID]]] = (
             {}
@@ -88,16 +89,17 @@ class LivelockDetector:
             from_agent.encode() + to_agent.encode() + content_hash
         ).digest()
 
-        # Per-pair buffer
-        pair_key = (from_agent, to_agent)
+        # Per-pair buffer — keyed by (workflow_id, from_agent, to_agent)
+        pair_key = (workflow_id, from_agent, to_agent)
         if pair_key not in self._pair_buffers:
             self._pair_buffers[pair_key] = RingBuffer(self._ring_size)
         self._pair_buffers[pair_key].append(content_hash)
 
-        # Track pairs per workflow
+        # Track pairs per workflow (using plain (from, to) for agent list extraction)
+        agent_pair = (from_agent, to_agent)
         if workflow_id not in self._pair_agents:
             self._pair_agents[workflow_id] = set()
-        self._pair_agents[workflow_id].add(pair_key)
+        self._pair_agents[workflow_id].add(agent_pair)
 
         # Per-workflow conversation buffer
         if workflow_id not in self._conversation_buffers:
@@ -167,7 +169,8 @@ class LivelockDetector:
         if workflow_id in self._conversation_buffers:
             self._conversation_buffers[workflow_id].clear()
         pairs = self._pair_agents.get(workflow_id, set())
-        for pair_key in pairs:
+        for agent_pair in pairs:
+            pair_key = (workflow_id, agent_pair[0], agent_pair[1])
             if pair_key in self._pair_buffers:
                 self._pair_buffers[pair_key].clear()
 
@@ -175,5 +178,6 @@ class LivelockDetector:
         """Remove all buffers for a workflow."""
         self._conversation_buffers.pop(workflow_id, None)
         pairs = self._pair_agents.pop(workflow_id, set())
-        for pair_key in pairs:
+        for agent_pair in pairs:
+            pair_key = (workflow_id, agent_pair[0], agent_pair[1])
             self._pair_buffers.pop(pair_key, None)

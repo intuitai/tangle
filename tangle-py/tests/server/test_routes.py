@@ -206,11 +206,10 @@ class TestHealthz:
 
 class TestPostEventInvalidType:
     async def test_post_event_invalid_type(self, client: httpx.AsyncClient) -> None:
-        """POST /v1/events with an unknown event type triggers a server error.
+        """POST /v1/events with an unknown event type returns 422 (not 500).
 
-        The EventType(req.type) call raises ValueError for unknown types.
-        Depending on FastAPI/ASGI transport config, this may propagate as a
-        500 response or raise through the transport.
+        EventType is used as the Pydantic field type, so Pydantic validates it
+        and returns a 422 Unprocessable Entity for invalid values.
         """
 
         payload = {
@@ -218,13 +217,8 @@ class TestPostEventInvalidType:
             "workflow_id": "wf-1",
             "from_agent": "A",
         }
-        try:
-            resp = await client.post("/v1/events", json=payload)
-            # If we get a response, it should be an error status
-            assert resp.status_code >= 400
-        except ValueError:
-            # ASGI transport may propagate the ValueError directly
-            pass
+        resp = await client.post("/v1/events", json=payload)
+        assert resp.status_code == 422
 
 
 class TestPostEventHexFallback:
@@ -242,18 +236,26 @@ class TestPostEventHexFallback:
         resp = await client.post("/v1/events", json=payload)
         assert resp.status_code == 202
 
-    async def test_post_event_zero_timestamp_defaults(
-        self, client: httpx.AsyncClient
+    async def test_post_event_zero_timestamp_preserved(
+        self, client: httpx.AsyncClient, monitor: TangleMonitor, fake_clock: FakeClock
     ) -> None:
-        """timestamp=0.0 is falsy so the monitor clock is used instead."""
+        """timestamp=0.0 must be preserved, not replaced with the monitor clock."""
+        # Advance the fake clock so clock() != 0.0
+        fake_clock.advance(10.0)
+
         payload = {
             "type": "register",
-            "workflow_id": "wf-1",
+            "workflow_id": "wf-ts",
             "from_agent": "A",
             "timestamp": 0.0,
         }
         resp = await client.post("/v1/events", json=payload)
         assert resp.status_code == 202
+
+        # The stored event should have timestamp 0.0, not 10.0
+        events = monitor._store.get_workflow_events("wf-ts")
+        assert len(events) == 1
+        assert events[0].timestamp == 0.0
 
 
 class TestBatchEventWithDetection:

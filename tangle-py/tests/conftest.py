@@ -49,6 +49,10 @@ class MockResolver:
         return "mock"
 
     @property
+    def is_notification(self) -> bool:
+        return False
+
+    @property
     def count(self) -> int:
         return len(self._detections)
 

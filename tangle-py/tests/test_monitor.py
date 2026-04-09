@@ -773,6 +773,121 @@ class TestWorkflowResetLivelock:
 
 
 # ---------------------------------------------------------------------------
+# Workflow isolation
+# ---------------------------------------------------------------------------
+
+
+class TestWorkflowIsolation:
+    def test_same_agent_id_across_workflows_no_false_deadlock(
+        self, monitor: TangleMonitor
+    ) -> None:
+        """Agents with same names in different workflows must not create false cycles."""
+        # wf-1: A waits for B
+        _feed(
+            monitor,
+            [
+                make_event(
+                    EventType.REGISTER, workflow_id="wf-iso-1", from_agent="A", timestamp=1.0
+                ),
+                make_event(
+                    EventType.REGISTER, workflow_id="wf-iso-1", from_agent="B", timestamp=2.0
+                ),
+                make_event(
+                    EventType.WAIT_FOR,
+                    workflow_id="wf-iso-1",
+                    from_agent="A",
+                    to_agent="B",
+                    timestamp=3.0,
+                ),
+            ],
+        )
+        # wf-2: B waits for A — cross-workflow, must NOT form a cycle
+        detections = _feed(
+            monitor,
+            [
+                make_event(
+                    EventType.REGISTER, workflow_id="wf-iso-2", from_agent="A", timestamp=4.0
+                ),
+                make_event(
+                    EventType.REGISTER, workflow_id="wf-iso-2", from_agent="B", timestamp=5.0
+                ),
+                make_event(
+                    EventType.WAIT_FOR,
+                    workflow_id="wf-iso-2",
+                    from_agent="B",
+                    to_agent="A",
+                    timestamp=6.0,
+                ),
+            ],
+        )
+        assert len(detections) == 0
+        assert len(monitor.active_detections()) == 0
+
+    def test_same_agent_pair_across_workflows_no_false_livelock(
+        self, fake_clock: FakeClock
+    ) -> None:
+        """Same (A,B) message pair in two workflows must not share livelock buffers."""
+        config = TangleConfig(
+            cycle_check_interval=999_999.0,
+            livelock_window=50,
+            livelock_min_repeats=3,
+            livelock_min_pattern=1,
+            livelock_ring_size=200,
+        )
+        monitor = TangleMonitor(config=config, clock=fake_clock)
+
+        # Send 8 repetitions in wf-1 (needs 9 for 3 repeats of pattern length 1)
+        for _ in range(8):
+            monitor.send("wf-ll-iso-1", "A", "B", body=b"loop")
+
+        # wf-2 gets only 1 message — must NOT trigger from wf-1's accumulated count
+        result = monitor.process_event(
+            make_event(
+                EventType.SEND,
+                workflow_id="wf-ll-iso-2",
+                from_agent="A",
+                to_agent="B",
+                message_body=b"loop",
+                timestamp=100.0,
+            )
+        )
+        assert result is None
+
+    def test_periodic_scan_dedup_respects_workflow_id(
+        self, fake_clock: FakeClock
+    ) -> None:
+        """Periodic scan dedup must not suppress a cycle in wf-2 due to an identical
+        agent-set cycle in wf-1."""
+        import time
+
+        from tangle.types import Edge
+
+        config = TangleConfig(cycle_check_interval=0.05)
+        monitor = TangleMonitor(config=config, clock=fake_clock)
+
+        # Inject A<->B cycle in wf-1 directly (bypasses incremental detection)
+        monitor._graph.register_agent("A", "wf-dedup-1", 1.0)
+        monitor._graph.register_agent("B", "wf-dedup-1", 2.0)
+        monitor._graph.add_edge(Edge("A", "B", "", 1.0, "wf-dedup-1"))
+        monitor._graph.add_edge(Edge("B", "A", "", 2.0, "wf-dedup-1"))
+
+        # Inject A<->B cycle in wf-2 (same agent names, different workflow)
+        monitor._graph.register_agent("A", "wf-dedup-2", 3.0)
+        monitor._graph.register_agent("B", "wf-dedup-2", 4.0)
+        monitor._graph.add_edge(Edge("A", "B", "", 3.0, "wf-dedup-2"))
+        monitor._graph.add_edge(Edge("B", "A", "", 4.0, "wf-dedup-2"))
+
+        monitor.start_background()
+        time.sleep(0.3)
+        monitor.stop()
+
+        deadlocks = [d for d in monitor.active_detections() if d.type == DetectionType.DEADLOCK]
+        workflow_ids = {d.cycle.workflow_id for d in deadlocks if d.cycle}
+        assert "wf-dedup-1" in workflow_ids
+        assert "wf-dedup-2" in workflow_ids
+
+
+# ---------------------------------------------------------------------------
 # stop() without start_background()
 # ---------------------------------------------------------------------------
 
@@ -896,5 +1011,171 @@ class TestOTelCollector:
         monitor.start_background()
         try:
             assert monitor._otel_collector is None
+        finally:
+            monitor.stop()
+
+
+# ---------------------------------------------------------------------------
+# Resolver chain two-phase model
+# ---------------------------------------------------------------------------
+
+
+class TestResolverChainTwoPhase:
+    def test_remediation_resolver_runs_after_successful_alert(
+        self, fake_clock: FakeClock
+    ) -> None:
+        """CancelResolver runs even when AlertResolver succeeds (two-phase model)."""
+        canceled: list[str] = []
+
+        def cancel_fn(agent_id: str, reason: str) -> None:
+            canceled.append(agent_id)
+
+        config = TangleConfig(
+            cycle_check_interval=999_999.0, resolution="cancel_youngest"
+        )
+        # No on_detection callback — AlertResolver succeeds normally
+        monitor = TangleMonitor(
+            config=config,
+            clock=fake_clock,
+            cancel_fn=cancel_fn,
+        )
+
+        monitor.register("wf-1", "A")
+        fake_clock.advance(1)
+        monitor.register("wf-1", "B")
+        fake_clock.advance(1)
+        monitor.wait_for("wf-1", "A", "B")
+        monitor.wait_for("wf-1", "B", "A")  # triggers deadlock
+
+        # CancelResolver must have fired even though AlertResolver succeeded
+        assert len(canceled) == 1
+        assert canceled[0] == "B"  # B is younger
+
+
+# ---------------------------------------------------------------------------
+# COMPLETE/CANCEL unblocks waiting agents
+# ---------------------------------------------------------------------------
+
+
+class TestCompleteUnblocksAgents:
+    def test_complete_removes_inbound_edges_and_unblocks(
+        self, monitor: TangleMonitor, fake_clock: FakeClock
+    ) -> None:
+        """When agent B completes, agents waiting on B become ACTIVE."""
+        monitor.register("wf-1", "A")
+        monitor.register("wf-1", "B")
+        monitor.register("wf-1", "C")
+        monitor.wait_for("wf-1", "A", "B")  # A waits on B
+        monitor.wait_for("wf-1", "C", "B")  # C waits on B
+
+        snap = monitor.snapshot("wf-1")
+        assert snap.states["A"] == AgentStatus.WAITING
+        assert snap.states["C"] == AgentStatus.WAITING
+
+        monitor.complete("wf-1", "B")
+
+        snap = monitor.snapshot("wf-1")
+        # A and C should now be ACTIVE (no more outgoing waits)
+        assert snap.states["A"] == AgentStatus.ACTIVE
+        assert snap.states["C"] == AgentStatus.ACTIVE
+        # Inbound edges to B should be gone
+        inbound_to_b = [e for e in snap.edges if e.to_agent == "B"]
+        assert len(inbound_to_b) == 0
+
+    def test_cancel_removes_inbound_edges_and_unblocks(
+        self, monitor: TangleMonitor, fake_clock: FakeClock
+    ) -> None:
+        """When agent B is canceled, agents waiting on B become ACTIVE."""
+        monitor.register("wf-1", "A")
+        monitor.register("wf-1", "B")
+        monitor.wait_for("wf-1", "A", "B")  # A waits on B
+
+        assert monitor.snapshot("wf-1").states["A"] == AgentStatus.WAITING
+
+        monitor.cancel("wf-1", "B", reason="timeout")
+
+        snap = monitor.snapshot("wf-1")
+        assert snap.states["A"] == AgentStatus.ACTIVE
+        inbound_to_b = [e for e in snap.edges if e.to_agent == "B"]
+        assert len(inbound_to_b) == 0
+
+
+# ---------------------------------------------------------------------------
+# RELEASE with remaining waits keeps WAITING state
+# ---------------------------------------------------------------------------
+
+
+class TestReleaseWithRemainingWaits:
+    def test_release_keeps_waiting_when_still_has_waits(
+        self, monitor: TangleMonitor, fake_clock: FakeClock
+    ) -> None:
+        """Agent stays WAITING after release if it still has other outgoing waits."""
+        monitor.register("wf-1", "A")
+        monitor.register("wf-1", "B")
+        monitor.register("wf-1", "C")
+        monitor.wait_for("wf-1", "A", "B")
+        monitor.wait_for("wf-1", "A", "C")  # A waits on both B and C
+
+        assert monitor.snapshot("wf-1").states["A"] == AgentStatus.WAITING
+
+        monitor.release("wf-1", "A", "B")  # release one wait
+
+        snap = monitor.snapshot("wf-1")
+        # A still waits on C — must remain WAITING
+        assert snap.states["A"] == AgentStatus.WAITING
+        remaining = [e for e in snap.edges if e.from_agent == "A"]
+        assert len(remaining) == 1
+        assert remaining[0].to_agent == "C"
+
+    def test_release_sets_active_when_no_remaining_waits(
+        self, monitor: TangleMonitor, fake_clock: FakeClock
+    ) -> None:
+        """Agent becomes ACTIVE after release if it has no more outgoing waits."""
+        monitor.register("wf-1", "A")
+        monitor.register("wf-1", "B")
+        monitor.wait_for("wf-1", "A", "B")
+
+        monitor.release("wf-1", "A", "B")
+
+        assert monitor.snapshot("wf-1").states["A"] == AgentStatus.ACTIVE
+
+
+# ---------------------------------------------------------------------------
+# stop() closes the store
+# ---------------------------------------------------------------------------
+
+
+class TestStopClosesStore:
+    def test_stop_closes_store(self, fake_clock: FakeClock) -> None:
+        """stop() calls close() on the underlying store."""
+        config = TangleConfig(cycle_check_interval=999_999.0)
+        monitor = TangleMonitor(config=config, clock=fake_clock)
+        monitor.stop()
+        # MemoryStore.close() sets _closed = True
+        assert monitor._store._closed is True
+
+    def test_stop_idempotent(self, fake_clock: FakeClock) -> None:
+        """Calling stop() twice does not raise."""
+        config = TangleConfig(cycle_check_interval=999_999.0)
+        monitor = TangleMonitor(config=config, clock=fake_clock)
+        monitor.stop()
+        monitor.stop()  # Should not raise
+
+
+# ---------------------------------------------------------------------------
+# start_background() idempotency
+# ---------------------------------------------------------------------------
+
+
+class TestStartBackgroundIdempotent:
+    def test_start_background_idempotent(self, fake_clock: FakeClock) -> None:
+        """Calling start_background() twice does not spawn duplicate threads."""
+        config = TangleConfig(cycle_check_interval=999_999.0)
+        monitor = TangleMonitor(config=config, clock=fake_clock)
+        monitor.start_background()
+        first_thread = monitor._scan_thread
+        try:
+            monitor.start_background()  # second call — should be a no-op
+            assert monitor._scan_thread is first_thread
         finally:
             monitor.stop()

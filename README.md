@@ -251,6 +251,72 @@ Endpoints (all under `/v1`):
 | GET    | `/v1/stats`             | Monitor statistics       |
 | GET    | `/healthz`              | Health check             |
 
+## Examples
+
+### LangGraph deadlock detection
+
+The `tangle-py/examples/langgraph_deadlock_detection.py` script shows a four-agent
+research pipeline — researcher, writer, reviewer, and editor — where the review/edit
+cycle creates a circular wait dependency:
+
+```
+researcher -> writer -> reviewer -> editor -> researcher
+```
+
+When each agent waits on the next and the last waits back on the first, no agent can
+make progress. Tangle detects the cycle the moment the closing edge is added.
+
+The example has two parts:
+
+1. A normal LangGraph workflow run (no deadlock) showing that `@tangle_node` and
+   `@tangle_conditional_edge` instrument the graph transparently.
+2. A simulated deadlock using `monitor.wait_for()` SDK calls to inject a four-agent
+   cycle directly, triggering the on-detection callback.
+
+**Run it:**
+
+```bash
+cd tangle-py && uv run python examples/langgraph_deadlock_detection.py
+```
+
+**Key instrumentation:**
+
+```python
+config = TangleConfig(resolution="cancel_youngest")
+monitor = TangleMonitor(config=config, on_detection=on_detection, cancel_fn=cancel_agent)
+
+@tangle_node(monitor, agent_id="researcher")
+def researcher_node(state): ...
+
+@tangle_conditional_edge(monitor, from_agent="editor")
+def editor_route(state):
+    return "researcher"   # back-edge that could close a cycle
+
+with monitor:
+    app.invoke({"tangle_workflow_id": "wf-1", ...})
+```
+
+**Expected output (abridged):**
+
+```
+[1] Running normal LangGraph workflow...
+[1] Workflow completed after 3 review iteration(s).
+
+[2] Now simulating a deadlock scenario...
+[deadlock-sim] editor is waiting for researcher  (cycle closes here!)
+
+[TANGLE] DEADLOCK DETECTED!
+  Cycle:    researcher -> writer -> reviewer -> editor -> researcher
+  Agents in deadlock: 4
+
+[2] Active detections: 1
+    Type: DEADLOCK | Cycle length: 4 agents | Resolved: False
+```
+
+The `cancel_youngest` resolver cancels the most recently registered agent to break
+the cycle. Swap it for `cancel_all`, `tiebreaker`, or `escalate` in `TangleConfig`
+to change the resolution behavior.
+
 ## Configuration
 
 `TangleConfig` is a Pydantic model. All fields have sensible defaults:

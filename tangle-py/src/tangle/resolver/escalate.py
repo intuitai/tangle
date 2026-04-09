@@ -17,6 +17,10 @@ class EscalateResolver:
     def name(self) -> str:
         return "escalate"
 
+    @property
+    def is_notification(self) -> bool:
+        return False
+
     def resolve(self, detection: Detection) -> None:
         if not self._webhook_url:
             logger.warning("escalate_resolver_skip", reason="no webhook_url configured")

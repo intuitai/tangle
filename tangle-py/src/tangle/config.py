@@ -27,10 +27,6 @@ class TangleConfig(BaseModel):
     livelock_ring_size: int = Field(
         default=200, ge=10, description="Ring buffer capacity per agent pair"
     )
-    livelock_semantic: bool = Field(
-        default=False, description="Enable semantic hashing"
-    )
-
     resolution: ResolutionAction = Field(default=ResolutionAction.ALERT)
     escalation_webhook_url: str = Field(default="")
     tiebreaker_prompt: str = Field(
@@ -39,8 +35,6 @@ class TangleConfig(BaseModel):
             "Please try a different approach or report that you are stuck."
         )
     )
-
-    event_queue_size: int = Field(default=10_000, ge=100)
 
     store_backend: str = Field(default="memory", pattern="^(memory|sqlite)$")
     sqlite_path: str = Field(default="tangle.db")

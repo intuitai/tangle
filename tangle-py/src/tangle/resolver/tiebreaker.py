@@ -25,6 +25,10 @@ class TiebreakerResolver:
     def name(self) -> str:
         return "tiebreaker"
 
+    @property
+    def is_notification(self) -> bool:
+        return False
+
     def resolve(self, detection: Detection) -> None:
         if not self._tiebreaker_fn:
             logger.info("tiebreaker_resolver_skip", reason="no tiebreaker_fn provided")

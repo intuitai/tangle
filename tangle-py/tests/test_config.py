@@ -18,10 +18,8 @@ class TestConfigDefaults:
         assert cfg.livelock_min_repeats == 3
         assert cfg.livelock_min_pattern == 2
         assert cfg.livelock_ring_size == 200
-        assert cfg.livelock_semantic is False
         assert cfg.resolution == ResolutionAction.ALERT
         assert cfg.escalation_webhook_url == ""
-        assert cfg.event_queue_size == 10_000
         assert cfg.store_backend == "memory"
         assert cfg.sqlite_path == "tangle.db"
         assert cfg.otel_enabled is False
@@ -113,9 +111,3 @@ class TestBoundaryValidation:
         cfg = TangleConfig(livelock_ring_size=10)
         assert cfg.livelock_ring_size == 10
 
-    def test_event_queue_size_boundary(self) -> None:
-        """event_queue_size must be >= 100."""
-        with pytest.raises(ValidationError):
-            TangleConfig(event_queue_size=99)
-        cfg = TangleConfig(event_queue_size=100)
-        assert cfg.event_queue_size == 100

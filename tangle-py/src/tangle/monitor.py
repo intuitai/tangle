@@ -42,7 +42,6 @@ class TangleMonitor:
         on_detection: Callable[[Detection], None] | None = None,
         cancel_fn: Callable[[AgentID, str], None] | None = None,
         tiebreaker_fn: Callable[[AgentID, str], None] | None = None,
-        escalate_fn: Callable[[Detection], None] | None = None,
     ) -> None:
         self._config = config or TangleConfig()
         self._clock = clock or time.monotonic
@@ -219,7 +218,9 @@ class TangleMonitor:
                     workflow_id=event.workflow_id,
                 )
                 self._graph.add_edge(edge)
-                self._graph.set_state(event.from_agent, AgentStatus.WAITING)
+                self._graph.set_state(
+                    event.from_agent, AgentStatus.WAITING, workflow_id=event.workflow_id
+                )
                 cycle = self._cycle_detector.on_edge_added(edge)
                 if cycle:
                     detection = Detection(
@@ -229,8 +230,12 @@ class TangleMonitor:
                     )
 
             elif event.type == EventType.RELEASE:
-                self._graph.remove_edge(event.from_agent, event.to_agent)
-                self._graph.set_state(event.from_agent, AgentStatus.ACTIVE)
+                wf = event.workflow_id
+                self._graph.remove_edge(event.from_agent, event.to_agent, workflow_id=wf)
+                if self._graph.outgoing_count(event.from_agent, wf) == 0:
+                    self._graph.set_state(
+                        event.from_agent, AgentStatus.ACTIVE, workflow_id=wf
+                    )
 
             elif event.type == EventType.SEND:
                 pattern = self._livelock_detector.on_message(
@@ -247,15 +252,35 @@ class TangleMonitor:
                     )
 
             elif event.type == EventType.COMPLETE:
-                self._graph.set_state(event.from_agent, AgentStatus.COMPLETED)
+                wf = event.workflow_id
+                self._graph.set_state(
+                    event.from_agent, AgentStatus.COMPLETED, workflow_id=wf
+                )
                 # Remove all outgoing edges
-                for edge in self._graph.outgoing(event.from_agent):
-                    self._graph.remove_edge(event.from_agent, edge.to_agent)
+                for edge in self._graph.outgoing(event.from_agent, workflow_id=wf):
+                    self._graph.remove_edge(
+                        event.from_agent, edge.to_agent, workflow_id=wf
+                    )
+                # Remove all inbound edges and unblock waiting agents
+                sources = self._graph.remove_inbound(event.from_agent, wf)
+                for src in sources:
+                    if self._graph.outgoing_count(src, wf) == 0:
+                        self._graph.set_state(src, AgentStatus.ACTIVE, workflow_id=wf)
 
             elif event.type == EventType.CANCEL:
-                self._graph.set_state(event.from_agent, AgentStatus.CANCELED)
-                for edge in self._graph.outgoing(event.from_agent):
-                    self._graph.remove_edge(event.from_agent, edge.to_agent)
+                wf = event.workflow_id
+                self._graph.set_state(
+                    event.from_agent, AgentStatus.CANCELED, workflow_id=wf
+                )
+                for edge in self._graph.outgoing(event.from_agent, workflow_id=wf):
+                    self._graph.remove_edge(
+                        event.from_agent, edge.to_agent, workflow_id=wf
+                    )
+                # Remove all inbound edges and unblock waiting agents
+                sources = self._graph.remove_inbound(event.from_agent, wf)
+                for src in sources:
+                    if self._graph.outgoing_count(src, wf) == 0:
+                        self._graph.set_state(src, AgentStatus.ACTIVE, workflow_id=wf)
 
             elif event.type == EventType.PROGRESS:
                 self._livelock_detector.report_progress(event.workflow_id)
@@ -279,7 +304,7 @@ class TangleMonitor:
                 wf_edges = [e for e in all_edges if e.workflow_id == workflow_id]
                 states = {}
                 for a in agents:
-                    s = self._graph.get_state(a)
+                    s = self._graph.get_state(a, workflow_id=workflow_id)
                     if s:
                         states[a] = s
                 return GraphSnapshot(nodes=agents, edges=wf_edges, states=states)
@@ -305,6 +330,8 @@ class TangleMonitor:
 
     # --- Lifecycle ---
     def start_background(self) -> None:
+        if self._scan_thread is not None and self._scan_thread.is_alive():
+            return
         self._stop_event.clear()
         self._scan_thread = threading.Thread(target=self._periodic_scan, daemon=True)
         self._scan_thread.start()
@@ -322,9 +349,11 @@ class TangleMonitor:
             with self._lock:
                 cycles = self._cycle_detector.full_scan()
                 for cycle in cycles:
-                    # Check if already detected
+                    # Check if already detected — include workflow_id so two workflows
+                    # with the same agent names don't suppress each other
                     already = any(
                         d.cycle
+                        and d.cycle.workflow_id == cycle.workflow_id
                         and set(d.cycle.agents) == set(cycle.agents)
                         and not d.cycle.resolved
                         for d in self._detections
@@ -348,6 +377,7 @@ class TangleMonitor:
         self._stop_event.set()
         if self._scan_thread and self._scan_thread.is_alive():
             self._scan_thread.join(timeout=5)
+        self._store.close()
 
     def reset_workflow(self, workflow_id: str) -> None:
         with self._lock:
