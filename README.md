@@ -1,7 +1,7 @@
 # Tangle
 
 [![Tests](https://github.com/intuitai/tangle/actions/workflows/tests.yml/badge.svg)](https://github.com/intuitai/tangle/actions/workflows/tests.yml)
-[![Python 3.14+](https://img.shields.io/badge/python-3.14%2B-blue.svg)](https://www.python.org/downloads/)
+[![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/downloads/)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 [![Coverage](https://img.shields.io/badge/coverage-98%25-brightgreen.svg)](#running-tests)
 
@@ -185,7 +185,7 @@ the cycle detector catches it within milliseconds.
 
 ## Requirements
 
-- Python >= 3.14
+- Python >= 3.10
 - [uv](https://docs.astral.sh/uv/) (recommended) or pip
 
 ## Installation

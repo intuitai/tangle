@@ -75,7 +75,7 @@ A background thread periodically runs `CycleDetector.full_scan()` (Kahn's algori
 
 ## Conventions
 
-- **Python 3.14** required (`requires-python = ">=3.14"`)
+- **Python 3.10** required (`requires-python = ">=3.10"`)
 - **Ruff** for linting (line-length=100, rules: E/F/I/UP/B/SIM/TCH)
 - **Black** for formatting
 - **Mypy** strict mode

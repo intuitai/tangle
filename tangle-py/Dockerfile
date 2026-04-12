@@ -1,10 +1,10 @@
-FROM ghcr.io/astral-sh/uv:python3.14-alpine AS builder
+FROM ghcr.io/astral-sh/uv:python3.10-alpine AS builder
 WORKDIR /app
 COPY pyproject.toml uv.lock .python-version ./
 RUN uv sync --frozen --no-dev --extra server --extra otel
 COPY . .
 
-FROM python:3.14-alpine
+FROM python:3.10-alpine
 COPY --from=builder /app /app
 WORKDIR /app
 EXPOSE 4317 8090
