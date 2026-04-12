@@ -7,6 +7,7 @@ from collections.abc import Callable
 import structlog
 
 from tangle.config import TangleConfig
+from tangle.logging import configure_logging, shutdown_logging
 from tangle.detector.cycle import CycleDetector
 from tangle.detector.livelock import LivelockDetector
 from tangle.graph.snapshot import GraphSnapshot
@@ -46,6 +47,12 @@ class TangleMonitor:
         self._config = config or TangleConfig()
         self._clock = clock or time.monotonic
         self._on_detection = on_detection
+
+        configure_logging(
+            otel_enabled=self._config.otel_enabled,
+            otel_endpoint=self._config.otel_log_endpoint,
+            service_name=self._config.service_name,
+        )
 
         self._graph = WaitForGraph()
         self._cycle_detector = CycleDetector(
@@ -380,6 +387,7 @@ class TangleMonitor:
         if self._scan_thread and self._scan_thread.is_alive():
             self._scan_thread.join(timeout=5)
         self._store.close()
+        shutdown_logging()
 
     def reset_workflow(self, workflow_id: str) -> None:
         with self._lock:

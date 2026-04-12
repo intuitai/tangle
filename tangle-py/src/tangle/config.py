@@ -40,9 +40,17 @@ class TangleConfig(BaseModel):
     sqlite_path: str = Field(default="tangle.db")
 
     otel_enabled: bool = Field(
-        default=False, description="Enable OTLP gRPC span receiver"
+        default=False, description="Enable OTLP gRPC span receiver and log export"
     )
     otel_port: int = Field(default=4317, description="OTLP gRPC receiver port")
+    otel_log_endpoint: str = Field(
+        default="http://localhost:4317",
+        description="OTLP gRPC endpoint for log export",
+    )
+    service_name: str = Field(
+        default="tangle",
+        description="OTel service.name resource attribute",
+    )
 
     server_host: str = Field(default="0.0.0.0")
     server_port: int = Field(default=8090)
