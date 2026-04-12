@@ -231,7 +231,9 @@ class TangleMonitor:
 
             elif event.type == EventType.RELEASE:
                 wf = event.workflow_id
-                self._graph.remove_edge(event.from_agent, event.to_agent, workflow_id=wf)
+                self._graph.remove_edge(
+                    event.from_agent, event.to_agent, workflow_id=wf
+                )
                 if self._graph.outgoing_count(event.from_agent, wf) == 0:
                     self._graph.set_state(
                         event.from_agent, AgentStatus.ACTIVE, workflow_id=wf

@@ -30,7 +30,9 @@ class ResolverChain:
                     resolver.resolve(detection)
                     logger.info("resolver_succeeded", resolver=resolver.name)
                 except Exception as e:
-                    logger.warning("resolver_failed", resolver=resolver.name, error=str(e))
+                    logger.warning(
+                        "resolver_failed", resolver=resolver.name, error=str(e)
+                    )
                     last_notification_error = e
 
         # Phase 2: run remediation resolvers (stop on first success)
@@ -42,7 +44,9 @@ class ResolverChain:
                     logger.info("resolver_succeeded", resolver=resolver.name)
                     return
                 except Exception as e:
-                    logger.warning("resolver_failed", resolver=resolver.name, error=str(e))
+                    logger.warning(
+                        "resolver_failed", resolver=resolver.name, error=str(e)
+                    )
                     last_error = e
         if last_error:
             raise last_error

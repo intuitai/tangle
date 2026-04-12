@@ -787,10 +787,16 @@ class TestWorkflowIsolation:
             monitor,
             [
                 make_event(
-                    EventType.REGISTER, workflow_id="wf-iso-1", from_agent="A", timestamp=1.0
+                    EventType.REGISTER,
+                    workflow_id="wf-iso-1",
+                    from_agent="A",
+                    timestamp=1.0,
                 ),
                 make_event(
-                    EventType.REGISTER, workflow_id="wf-iso-1", from_agent="B", timestamp=2.0
+                    EventType.REGISTER,
+                    workflow_id="wf-iso-1",
+                    from_agent="B",
+                    timestamp=2.0,
                 ),
                 make_event(
                     EventType.WAIT_FOR,
@@ -806,10 +812,16 @@ class TestWorkflowIsolation:
             monitor,
             [
                 make_event(
-                    EventType.REGISTER, workflow_id="wf-iso-2", from_agent="A", timestamp=4.0
+                    EventType.REGISTER,
+                    workflow_id="wf-iso-2",
+                    from_agent="A",
+                    timestamp=4.0,
                 ),
                 make_event(
-                    EventType.REGISTER, workflow_id="wf-iso-2", from_agent="B", timestamp=5.0
+                    EventType.REGISTER,
+                    workflow_id="wf-iso-2",
+                    from_agent="B",
+                    timestamp=5.0,
                 ),
                 make_event(
                     EventType.WAIT_FOR,
@@ -881,7 +893,9 @@ class TestWorkflowIsolation:
         time.sleep(0.3)
         monitor.stop()
 
-        deadlocks = [d for d in monitor.active_detections() if d.type == DetectionType.DEADLOCK]
+        deadlocks = [
+            d for d in monitor.active_detections() if d.type == DetectionType.DEADLOCK
+        ]
         workflow_ids = {d.cycle.workflow_id for d in deadlocks if d.cycle}
         assert "wf-dedup-1" in workflow_ids
         assert "wf-dedup-2" in workflow_ids

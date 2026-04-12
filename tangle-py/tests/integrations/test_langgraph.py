@@ -114,8 +114,6 @@ class TestTangleNode:
         # 1 REGISTER + 1 SEND (for "output"), NOT 2 SEND
         assert monitor.stats()["events_processed"] == 2
 
-
-
     def test_tangle_node_reregisters_after_reset_workflow(
         self, monitor: TangleMonitor, fake_clock: FakeClock
     ) -> None:
@@ -147,6 +145,7 @@ class TestTangleNode:
         assert events_after_second_run > events_after_first_run
         snap_final = monitor.snapshot("wf-reset")
         assert "resettable" in snap_final.nodes
+
 
 # ---------------------------------------------------------------------------
 # tangle_conditional_edge decorator

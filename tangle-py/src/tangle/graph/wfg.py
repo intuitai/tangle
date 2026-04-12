@@ -27,7 +27,9 @@ class WaitForGraph:
         with self._lock:
             self._edges[(edge.workflow_id, edge.from_agent)][edge.to_agent] = edge
 
-    def remove_edge(self, from_agent: AgentID, to_agent: AgentID, workflow_id: str = "") -> None:
+    def remove_edge(
+        self, from_agent: AgentID, to_agent: AgentID, workflow_id: str = ""
+    ) -> None:
         with self._lock:
             if workflow_id:
                 key = (workflow_id, from_agent)
@@ -53,7 +55,9 @@ class WaitForGraph:
             self._join_times[node_key] = timestamp
             self._workflow_agents[workflow_id].add(agent_id)
 
-    def set_state(self, agent_id: AgentID, state: AgentStatus, workflow_id: str = "") -> None:
+    def set_state(
+        self, agent_id: AgentID, state: AgentStatus, workflow_id: str = ""
+    ) -> None:
         with self._lock:
             if workflow_id:
                 self._states[(workflow_id, agent_id)] = state
@@ -64,7 +68,9 @@ class WaitForGraph:
                     if aid == agent_id:
                         self._states[key] = state
 
-    def has_edge(self, from_agent: AgentID, to_agent: AgentID, workflow_id: str = "") -> bool:
+    def has_edge(
+        self, from_agent: AgentID, to_agent: AgentID, workflow_id: str = ""
+    ) -> bool:
         with self._lock:
             if workflow_id:
                 return to_agent in self._edges.get((workflow_id, from_agent), {})

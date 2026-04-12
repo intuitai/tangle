@@ -110,4 +110,3 @@ class TestBoundaryValidation:
             TangleConfig(livelock_ring_size=9)
         cfg = TangleConfig(livelock_ring_size=10)
         assert cfg.livelock_ring_size == 10
-
