@@ -12,7 +12,10 @@ if TYPE_CHECKING:
 
 try:
     import grpc
-    from opentelemetry.proto.collector.trace.v1 import trace_service_pb2, trace_service_pb2_grpc
+    from opentelemetry.proto.collector.trace.v1 import (
+        trace_service_pb2,
+        trace_service_pb2_grpc,
+    )
 
     _GRPC_AVAILABLE = True
 except ImportError:
