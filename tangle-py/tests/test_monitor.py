@@ -8,13 +8,8 @@ import pytest
 
 from tangle.config import TangleConfig
 from tangle.monitor import TangleMonitor
-from tangle.types import (
-    AgentStatus,
-    Detection,
-    DetectionType,
-    Event,
-    EventType,
-)
+from tangle.types import (AgentStatus, Detection, DetectionType, Event,
+                          EventType)
 from tests.conftest import FakeClock, make_event
 
 # ---------------------------------------------------------------------------

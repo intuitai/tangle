@@ -7,11 +7,11 @@ from collections.abc import Callable
 import structlog
 
 from tangle.config import TangleConfig
-from tangle.logging import configure_logging, shutdown_logging
 from tangle.detector.cycle import CycleDetector
 from tangle.detector.livelock import LivelockDetector
 from tangle.graph.snapshot import GraphSnapshot
 from tangle.graph.wfg import WaitForGraph
+from tangle.logging import configure_logging, shutdown_logging
 from tangle.resolver.alert import AlertResolver
 from tangle.resolver.cancel import CancelResolver
 from tangle.resolver.chain import ResolverChain
@@ -19,16 +19,8 @@ from tangle.resolver.escalate import EscalateResolver
 from tangle.resolver.tiebreaker import TiebreakerResolver
 from tangle.store.memory import MemoryStore
 from tangle.store.sqlite import SQLiteStore
-from tangle.types import (
-    AgentID,
-    AgentStatus,
-    Detection,
-    DetectionType,
-    Edge,
-    Event,
-    EventType,
-    Severity,
-)
+from tangle.types import (AgentID, AgentStatus, Detection, DetectionType, Edge,
+                          Event, EventType, Severity)
 
 logger = structlog.get_logger("tangle")
 

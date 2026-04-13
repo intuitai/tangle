@@ -6,13 +6,7 @@ import pytest
 
 from tangle.config import TangleConfig
 from tangle.monitor import TangleMonitor
-from tangle.types import (
-    Detection,
-    DetectionType,
-    Event,
-    EventType,
-    Severity,
-)
+from tangle.types import Detection, DetectionType, Event, EventType, Severity
 
 # ---------------------------------------------------------------------------
 # FakeClock

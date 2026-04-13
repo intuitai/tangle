@@ -15,15 +15,8 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-from tangle.types import (
-    Cycle,
-    Detection,
-    DetectionType,
-    Event,
-    EventType,
-    LivelockPattern,
-    Severity,
-)
+from tangle.types import (Cycle, Detection, DetectionType, Event, EventType,
+                          LivelockPattern, Severity)
 
 
 def _make_deadlock_detection(workflow_id: str = "wf-1") -> Detection:

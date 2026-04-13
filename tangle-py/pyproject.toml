@@ -24,6 +24,7 @@ dependencies = [
     "xxhash>=3.5.0",
     "pydantic>=2.10",
     "structlog>=24.4",
+    "isort>=8.0.1",
 ]
 
 [project.optional-dependencies]

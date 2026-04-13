@@ -13,15 +13,8 @@ from tangle.resolver.cancel import CancelResolver
 from tangle.resolver.chain import ResolverChain
 from tangle.resolver.escalate import EscalateResolver
 from tangle.resolver.tiebreaker import TiebreakerResolver
-from tangle.types import (
-    Cycle,
-    Detection,
-    DetectionType,
-    LivelockPattern,
-    ResolutionAction,
-    Severity,
-)
-
+from tangle.types import (Cycle, Detection, DetectionType, LivelockPattern,
+                          ResolutionAction, Severity)
 # Re-use conftest helpers
 from tests.conftest import MockResolver
 
