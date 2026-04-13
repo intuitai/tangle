@@ -179,9 +179,7 @@ class TestTangleConditionalEdge:
         # RELEASE removes the edge, so snapshot should have no edges
         snap = monitor.snapshot("wf-1")
         wait_edges = [
-            e
-            for e in snap.edges
-            if e.from_agent == "router" and e.to_agent == "reviewer"
+            e for e in snap.edges if e.from_agent == "router" and e.to_agent == "reviewer"
         ]
         assert len(wait_edges) == 0
 
@@ -307,9 +305,7 @@ class TestTangleNodeEdgeCases:
         received: dict = {}
 
         @tangle_node(monitor, "agent")
-        def node_with_args(
-            state: dict[str, Any], extra: int, key: str = ""
-        ) -> dict[str, Any]:
+        def node_with_args(state: dict[str, Any], extra: int, key: str = "") -> dict[str, Any]:
             received["extra"] = extra
             received["key"] = key
             return {}

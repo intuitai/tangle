@@ -35,9 +35,7 @@ class MemoryStore:
                     break
             return results
 
-    def list_detections_by_type(
-        self, dtype: DetectionType, limit: int = 100
-    ) -> list[Detection]:
+    def list_detections_by_type(self, dtype: DetectionType, limit: int = 100) -> list[Detection]:
         with self._lock:
             results: list[Detection] = []
             for d in self._detections:
@@ -53,12 +51,8 @@ class MemoryStore:
 
     def stats(self) -> dict[str, int]:
         with self._lock:
-            deadlocks = sum(
-                1 for d in self._detections if d.type == DetectionType.DEADLOCK
-            )
-            livelocks = sum(
-                1 for d in self._detections if d.type == DetectionType.LIVELOCK
-            )
+            deadlocks = sum(1 for d in self._detections if d.type == DetectionType.DEADLOCK)
+            livelocks = sum(1 for d in self._detections if d.type == DetectionType.LIVELOCK)
             return {
                 "total_detections": len(self._detections),
                 "deadlocks_detected": deadlocks,

@@ -106,9 +106,7 @@ class SQLiteStore:
             )
             return [self._row_to_detection(row) for row in cursor.fetchall()]
 
-    def list_detections_by_type(
-        self, dtype: DetectionType, limit: int = 100
-    ) -> list[Detection]:
+    def list_detections_by_type(self, dtype: DetectionType, limit: int = 100) -> list[Detection]:
         with self._lock:
             cursor = self._conn.execute(
                 "SELECT type, severity, data FROM detections WHERE type = ? LIMIT ?",

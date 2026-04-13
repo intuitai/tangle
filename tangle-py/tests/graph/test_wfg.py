@@ -387,9 +387,7 @@ class TestConcurrency:
             except Exception as exc:
                 errors.append(exc)
 
-        threads = [
-            threading.Thread(target=worker, args=(i,)) for i in range(num_threads)
-        ]
+        threads = [threading.Thread(target=worker, args=(i,)) for i in range(num_threads)]
         for t in threads:
             t.start()
         for t in threads:

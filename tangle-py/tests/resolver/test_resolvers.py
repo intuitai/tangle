@@ -30,9 +30,7 @@ from tests.conftest import MockResolver
 # ---------------------------------------------------------------------------
 
 
-def _deadlock_detection(
-    agents: list[str] | None = None, workflow_id: str = "wf-1"
-) -> Detection:
+def _deadlock_detection(agents: list[str] | None = None, workflow_id: str = "wf-1") -> Detection:
     """Build a Detection with a Cycle for testing resolvers."""
     if agents is None:
         agents = ["A", "B", "C"]
@@ -43,9 +41,7 @@ def _deadlock_detection(
     )
 
 
-def _livelock_detection(
-    agents: list[str] | None = None, workflow_id: str = "wf-1"
-) -> Detection:
+def _livelock_detection(agents: list[str] | None = None, workflow_id: str = "wf-1") -> Detection:
     """Build a Detection with a LivelockPattern for testing resolvers."""
     if agents is None:
         agents = ["A", "B"]
@@ -64,7 +60,6 @@ def _livelock_detection(
 
 
 class TestAlertResolver:
-
     def test_alert_resolver_calls_callback(self) -> None:
         """The on_detection callback is invoked when resolve() is called."""
         callback = MagicMock()
@@ -119,7 +114,6 @@ class TestAlertResolver:
 
 
 class TestCancelResolver:
-
     def test_cancel_resolver_youngest(self) -> None:
         """In CANCEL_YOUNGEST mode, the agent with the latest join time is canceled."""
         graph = WaitForGraph()
@@ -128,9 +122,7 @@ class TestCancelResolver:
         graph.register_agent("C", "wf-1", 3.0)  # Youngest
 
         cancel_fn = MagicMock()
-        resolver = CancelResolver(
-            graph, cancel_fn=cancel_fn, mode=ResolutionAction.CANCEL_YOUNGEST
-        )
+        resolver = CancelResolver(graph, cancel_fn=cancel_fn, mode=ResolutionAction.CANCEL_YOUNGEST)
         detection = _deadlock_detection(["A", "B", "C"])
 
         resolver.resolve(detection)
@@ -147,9 +139,7 @@ class TestCancelResolver:
         graph.register_agent("C", "wf-1", 3.0)
 
         cancel_fn = MagicMock()
-        resolver = CancelResolver(
-            graph, cancel_fn=cancel_fn, mode=ResolutionAction.CANCEL_ALL
-        )
+        resolver = CancelResolver(graph, cancel_fn=cancel_fn, mode=ResolutionAction.CANCEL_ALL)
         detection = _deadlock_detection(["A", "B", "C"])
 
         resolver.resolve(detection)
@@ -182,9 +172,7 @@ class TestCancelResolver:
         graph.register_agent("B", "wf-1", 5.0)  # Youngest
 
         cancel_fn = MagicMock()
-        resolver = CancelResolver(
-            graph, cancel_fn=cancel_fn, mode=ResolutionAction.CANCEL_YOUNGEST
-        )
+        resolver = CancelResolver(graph, cancel_fn=cancel_fn, mode=ResolutionAction.CANCEL_YOUNGEST)
         detection = _livelock_detection(["A", "B"])
 
         resolver.resolve(detection)
@@ -200,7 +188,6 @@ class TestCancelResolver:
 
 
 class TestTiebreakerResolver:
-
     def test_tiebreaker_resolver(self) -> None:
         """tiebreaker_fn is called with the first agent and the configured prompt."""
         tiebreaker_fn = MagicMock()
@@ -242,7 +229,6 @@ class TestTiebreakerResolver:
 
 
 class TestEscalateResolver:
-
     def test_escalate_resolver_success(self) -> None:
         """Mock httpx POST returning 200 succeeds without error."""
         resolver = EscalateResolver(webhook_url="https://example.com/hook")
@@ -286,10 +272,13 @@ class TestEscalateResolver:
         resolver = EscalateResolver(webhook_url="https://example.com/hook")
         detection = _deadlock_detection(["A"])
 
-        with patch(
-            "httpx.post",
-            side_effect=httpx.TimeoutException("timed out"),
-        ), pytest.raises(httpx.TimeoutException):
+        with (
+            patch(
+                "httpx.post",
+                side_effect=httpx.TimeoutException("timed out"),
+            ),
+            pytest.raises(httpx.TimeoutException),
+        ):
             resolver.resolve(detection)
 
     def test_escalate_resolver_no_url(self) -> None:
@@ -331,7 +320,6 @@ class TestEscalateResolver:
 
 
 class TestResolverChain:
-
     def test_chain_resolver_first_succeeds(self) -> None:
         """When the first resolver succeeds, the second is not called."""
         first = MockResolver()
@@ -424,15 +412,12 @@ class TestResolverChain:
 
 
 class TestCancelResolverEdgeCases:
-
     def test_find_youngest_fallback_no_join_times(self) -> None:
         """When no agent has a join time, falls back to agents[-1]."""
         graph = WaitForGraph()
         # Don't register agents — no join times available
         cancel_fn = MagicMock()
-        resolver = CancelResolver(
-            graph, cancel_fn=cancel_fn, mode=ResolutionAction.CANCEL_YOUNGEST
-        )
+        resolver = CancelResolver(graph, cancel_fn=cancel_fn, mode=ResolutionAction.CANCEL_YOUNGEST)
         detection = _deadlock_detection(["X", "Y", "Z"])
 
         resolver.resolve(detection)
@@ -445,9 +430,7 @@ class TestCancelResolverEdgeCases:
         """Detection with neither cycle nor livelock results in no cancel calls."""
         graph = WaitForGraph()
         cancel_fn = MagicMock()
-        resolver = CancelResolver(
-            graph, cancel_fn=cancel_fn, mode=ResolutionAction.CANCEL_YOUNGEST
-        )
+        resolver = CancelResolver(graph, cancel_fn=cancel_fn, mode=ResolutionAction.CANCEL_YOUNGEST)
         detection = Detection(
             type=DetectionType.DEADLOCK,
             severity=Severity.CRITICAL,
@@ -466,7 +449,6 @@ class TestCancelResolverEdgeCases:
 
 
 class TestTiebreakerResolverEdgeCases:
-
     def test_tiebreaker_with_livelock(self) -> None:
         """TiebreakerResolver works with livelock detections."""
         tiebreaker_fn = MagicMock()
@@ -498,7 +480,6 @@ class TestTiebreakerResolverEdgeCases:
 
 
 class TestEscalateResolverEdgeCases:
-
     def test_escalate_bearer_token(self) -> None:
         """TANGLE_ESCALATION_WEBHOOK_TOKEN env var adds Authorization header."""
         import os
@@ -510,9 +491,10 @@ class TestEscalateResolverEdgeCases:
         mock_response.status_code = 200
         mock_response.raise_for_status = MagicMock()
 
-        with patch.dict(
-            os.environ, {"TANGLE_ESCALATION_WEBHOOK_TOKEN": "secret-token"}
-        ), patch("httpx.post", return_value=mock_response) as mock_post:
+        with (
+            patch.dict(os.environ, {"TANGLE_ESCALATION_WEBHOOK_TOKEN": "secret-token"}),
+            patch("httpx.post", return_value=mock_response) as mock_post,
+        ):
             resolver.resolve(detection)
 
         headers = mock_post.call_args[1]["headers"]

@@ -53,13 +53,9 @@ class EscalateResolver:
             headers["Authorization"] = f"Bearer {token}"
 
         try:
-            resp = httpx.post(
-                self._webhook_url, json=payload, headers=headers, timeout=10.0
-            )
+            resp = httpx.post(self._webhook_url, json=payload, headers=headers, timeout=10.0)
             resp.raise_for_status()
-            logger.info(
-                "escalation_sent", url=self._webhook_url, status=resp.status_code
-            )
+            logger.info("escalation_sent", url=self._webhook_url, status=resp.status_code)
         except httpx.TimeoutException:
             logger.error("escalation_timeout", url=self._webhook_url)
             raise

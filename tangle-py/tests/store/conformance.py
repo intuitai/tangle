@@ -105,15 +105,9 @@ def _test_record_event_and_retrieve(store_factory: Callable) -> None:
     """Record events and retrieve them by workflow_id."""
     store = store_factory()
     try:
-        e1 = _make_event(
-            EventType.REGISTER, workflow_id="wf-1", from_agent="A", timestamp=1.0
-        )
-        e2 = _make_event(
-            EventType.REGISTER, workflow_id="wf-1", from_agent="B", timestamp=2.0
-        )
-        e3 = _make_event(
-            EventType.REGISTER, workflow_id="wf-2", from_agent="X", timestamp=3.0
-        )
+        e1 = _make_event(EventType.REGISTER, workflow_id="wf-1", from_agent="A", timestamp=1.0)
+        e2 = _make_event(EventType.REGISTER, workflow_id="wf-1", from_agent="B", timestamp=2.0)
+        e3 = _make_event(EventType.REGISTER, workflow_id="wf-2", from_agent="X", timestamp=3.0)
         store.record_event(e1)
         store.record_event(e2)
         store.record_event(e3)

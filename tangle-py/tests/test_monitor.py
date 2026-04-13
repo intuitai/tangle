@@ -32,9 +32,7 @@ def _feed(monitor: TangleMonitor, events: list[Event]) -> list[Detection]:
 
 
 class TestDeadlockDetection:
-    def test_deadlock_detection(
-        self, monitor: TangleMonitor, deadlock_2: list[Event]
-    ) -> None:
+    def test_deadlock_detection(self, monitor: TangleMonitor, deadlock_2: list[Event]) -> None:
         """A->B, B->A should produce exactly one deadlock detection."""
         detections = _feed(monitor, deadlock_2)
 
@@ -77,9 +75,7 @@ class TestLivelockDetection:
         detections = _feed(monitor, livelock_pingpong)
 
         assert len(detections) >= 1
-        livelock_detections = [
-            d for d in detections if d.type == DetectionType.LIVELOCK
-        ]
+        livelock_detections = [d for d in detections if d.type == DetectionType.LIVELOCK]
         assert len(livelock_detections) >= 1
         d = livelock_detections[0]
         assert d.livelock is not None
@@ -217,9 +213,7 @@ class TestEdgeRelease:
 
 
 class TestWorkflowReset:
-    def test_workflow_reset(
-        self, monitor: TangleMonitor, deadlock_2: list[Event]
-    ) -> None:
+    def test_workflow_reset(self, monitor: TangleMonitor, deadlock_2: list[Event]) -> None:
         """reset_workflow clears all state for that workflow."""
         _feed(monitor, deadlock_2)
         assert len(monitor.active_detections()) == 1
@@ -242,12 +236,8 @@ class TestMultipleWorkflows:
         """Deadlock in wf-1 should not affect wf-2."""
         # Deadlock in wf-1
         wf1_events = [
-            make_event(
-                EventType.REGISTER, workflow_id="wf-1", from_agent="A", timestamp=1.0
-            ),
-            make_event(
-                EventType.REGISTER, workflow_id="wf-1", from_agent="B", timestamp=2.0
-            ),
+            make_event(EventType.REGISTER, workflow_id="wf-1", from_agent="A", timestamp=1.0),
+            make_event(EventType.REGISTER, workflow_id="wf-1", from_agent="B", timestamp=2.0),
             make_event(
                 EventType.WAIT_FOR,
                 workflow_id="wf-1",
@@ -265,12 +255,8 @@ class TestMultipleWorkflows:
         ]
         # Normal activity in wf-2
         wf2_events = [
-            make_event(
-                EventType.REGISTER, workflow_id="wf-2", from_agent="X", timestamp=5.0
-            ),
-            make_event(
-                EventType.REGISTER, workflow_id="wf-2", from_agent="Y", timestamp=6.0
-            ),
+            make_event(EventType.REGISTER, workflow_id="wf-2", from_agent="X", timestamp=5.0),
+            make_event(EventType.REGISTER, workflow_id="wf-2", from_agent="Y", timestamp=6.0),
             make_event(
                 EventType.WAIT_FOR,
                 workflow_id="wf-2",
@@ -397,9 +383,7 @@ class TestConcurrency:
 
 
 class TestSDKHooks:
-    def test_sdk_hooks_wait_for(
-        self, monitor: TangleMonitor, fake_clock: FakeClock
-    ) -> None:
+    def test_sdk_hooks_wait_for(self, monitor: TangleMonitor, fake_clock: FakeClock) -> None:
         """wait_for convenience method creates the right event."""
         monitor.register("wf-sdk", "A")
         monitor.register("wf-sdk", "B")
@@ -411,9 +395,7 @@ class TestSDKHooks:
         assert snap.edges[0].to_agent == "B"
         assert snap.edges[0].resource == "data"
 
-    def test_sdk_hooks_send(
-        self, monitor: TangleMonitor, fake_clock: FakeClock
-    ) -> None:
+    def test_sdk_hooks_send(self, monitor: TangleMonitor, fake_clock: FakeClock) -> None:
         """send convenience method works without errors."""
         monitor.register("wf-sdk", "A")
         monitor.register("wf-sdk", "B")
@@ -421,9 +403,7 @@ class TestSDKHooks:
 
         assert monitor.stats()["events_processed"] == 3  # 2 register + 1 send
 
-    def test_sdk_hooks_register(
-        self, monitor: TangleMonitor, fake_clock: FakeClock
-    ) -> None:
+    def test_sdk_hooks_register(self, monitor: TangleMonitor, fake_clock: FakeClock) -> None:
         """register convenience method registers the agent in the graph."""
         monitor.register("wf-sdk", "AgentX")
 
@@ -431,9 +411,7 @@ class TestSDKHooks:
         assert "AgentX" in snap.nodes
         assert snap.states["AgentX"] == AgentStatus.ACTIVE
 
-    def test_sdk_hooks_complete(
-        self, monitor: TangleMonitor, fake_clock: FakeClock
-    ) -> None:
+    def test_sdk_hooks_complete(self, monitor: TangleMonitor, fake_clock: FakeClock) -> None:
         """complete convenience method marks agent as completed and removes edges."""
         monitor.register("wf-sdk", "A")
         monitor.register("wf-sdk", "B")
@@ -447,9 +425,7 @@ class TestSDKHooks:
         a_edges = [e for e in snap.edges if e.from_agent == "A"]
         assert len(a_edges) == 0
 
-    def test_sdk_hooks_cancel(
-        self, monitor: TangleMonitor, fake_clock: FakeClock
-    ) -> None:
+    def test_sdk_hooks_cancel(self, monitor: TangleMonitor, fake_clock: FakeClock) -> None:
         """cancel convenience method marks agent as canceled and removes edges."""
         monitor.register("wf-sdk", "A")
         monitor.register("wf-sdk", "B")
@@ -462,9 +438,7 @@ class TestSDKHooks:
         a_edges = [e for e in snap.edges if e.from_agent == "A"]
         assert len(a_edges) == 0
 
-    def test_sdk_hooks_release(
-        self, monitor: TangleMonitor, fake_clock: FakeClock
-    ) -> None:
+    def test_sdk_hooks_release(self, monitor: TangleMonitor, fake_clock: FakeClock) -> None:
         """release convenience method removes the edge and sets agent to ACTIVE."""
         monitor.register("wf-sdk", "A")
         monitor.register("wf-sdk", "B")
@@ -476,9 +450,7 @@ class TestSDKHooks:
         assert len(snap.edges) == 0
         assert snap.states["A"] == AgentStatus.ACTIVE
 
-    def test_sdk_hooks_report_progress(
-        self, monitor: TangleMonitor, fake_clock: FakeClock
-    ) -> None:
+    def test_sdk_hooks_report_progress(self, monitor: TangleMonitor, fake_clock: FakeClock) -> None:
         """report_progress creates a PROGRESS event with from_agent=__system__."""
         monitor.report_progress("wf-sdk", "step completed")
         assert monitor.stats()["events_processed"] == 1
@@ -505,9 +477,7 @@ class TestResolverWiring:
         def bad_callback(det: Detection) -> None:
             raise RuntimeError("force fallthrough")
 
-        config = TangleConfig(
-            cycle_check_interval=999_999.0, resolution="cancel_youngest"
-        )
+        config = TangleConfig(cycle_check_interval=999_999.0, resolution="cancel_youngest")
         monitor = TangleMonitor(
             config=config,
             clock=fake_clock,
@@ -603,9 +573,7 @@ class TestResolverWiring:
 
 
 class TestResolverExceptionHandling:
-    def test_failing_resolver_does_not_crash_process_event(
-        self, fake_clock: FakeClock
-    ) -> None:
+    def test_failing_resolver_does_not_crash_process_event(self, fake_clock: FakeClock) -> None:
         """A failing resolver logs but doesn't crash event processing."""
         config = TangleConfig(cycle_check_interval=999_999.0, resolution="tiebreaker")
 
@@ -678,9 +646,7 @@ class TestPeriodicScan:
         time.sleep(0.2)
         monitor.stop()
 
-        deadlocks = [
-            d for d in monitor.active_detections() if d.type == DetectionType.DEADLOCK
-        ]
+        deadlocks = [d for d in monitor.active_detections() if d.type == DetectionType.DEADLOCK]
         assert len(deadlocks) == 1
 
 
@@ -712,12 +678,8 @@ class TestSnapshotGlobal:
     def test_snapshot_without_workflow_id(self, monitor: TangleMonitor) -> None:
         """snapshot(None) returns the full global graph."""
         events = [
-            make_event(
-                EventType.REGISTER, workflow_id="wf-1", from_agent="A", timestamp=1.0
-            ),
-            make_event(
-                EventType.REGISTER, workflow_id="wf-2", from_agent="X", timestamp=2.0
-            ),
+            make_event(EventType.REGISTER, workflow_id="wf-1", from_agent="A", timestamp=1.0),
+            make_event(EventType.REGISTER, workflow_id="wf-2", from_agent="X", timestamp=2.0),
         ]
         _feed(monitor, events)
 
@@ -760,9 +722,7 @@ class TestWorkflowResetLivelock:
             monitor.send("wf-ll", "A", "B", body=b"req")
             monitor.send("wf-ll", "B", "A", body=b"rej")
 
-        livelock_dets = [
-            d for d in monitor.active_detections() if d.type == DetectionType.LIVELOCK
-        ]
+        livelock_dets = [d for d in monitor.active_detections() if d.type == DetectionType.LIVELOCK]
         assert len(livelock_dets) == 0
 
 
@@ -772,9 +732,7 @@ class TestWorkflowResetLivelock:
 
 
 class TestWorkflowIsolation:
-    def test_same_agent_id_across_workflows_no_false_deadlock(
-        self, monitor: TangleMonitor
-    ) -> None:
+    def test_same_agent_id_across_workflows_no_false_deadlock(self, monitor: TangleMonitor) -> None:
         """Agents with same names in different workflows must not create false cycles."""
         # wf-1: A waits for B
         _feed(
@@ -859,9 +817,7 @@ class TestWorkflowIsolation:
         )
         assert result is None
 
-    def test_periodic_scan_dedup_respects_workflow_id(
-        self, fake_clock: FakeClock
-    ) -> None:
+    def test_periodic_scan_dedup_respects_workflow_id(self, fake_clock: FakeClock) -> None:
         """Periodic scan dedup must not suppress a cycle in wf-2 due to an identical
         agent-set cycle in wf-1."""
         import time
@@ -887,9 +843,7 @@ class TestWorkflowIsolation:
         time.sleep(0.3)
         monitor.stop()
 
-        deadlocks = [
-            d for d in monitor.active_detections() if d.type == DetectionType.DEADLOCK
-        ]
+        deadlocks = [d for d in monitor.active_detections() if d.type == DetectionType.DEADLOCK]
         workflow_ids = {d.cycle.workflow_id for d in deadlocks if d.cycle}
         assert "wf-dedup-1" in workflow_ids
         assert "wf-dedup-2" in workflow_ids
@@ -998,9 +952,7 @@ class TestOTelCollector:
         import grpc
 
         port = 14317  # high port unlikely to be in use
-        config = TangleConfig(
-            cycle_check_interval=999_999.0, otel_enabled=True, otel_port=port
-        )
+        config = TangleConfig(cycle_check_interval=999_999.0, otel_enabled=True, otel_port=port)
         monitor = TangleMonitor(config=config, clock=fake_clock)
         monitor.start_background()
         try:
@@ -1029,18 +981,14 @@ class TestOTelCollector:
 
 
 class TestResolverChainTwoPhase:
-    def test_remediation_resolver_runs_after_successful_alert(
-        self, fake_clock: FakeClock
-    ) -> None:
+    def test_remediation_resolver_runs_after_successful_alert(self, fake_clock: FakeClock) -> None:
         """CancelResolver runs even when AlertResolver succeeds (two-phase model)."""
         canceled: list[str] = []
 
         def cancel_fn(agent_id: str, reason: str) -> None:
             canceled.append(agent_id)
 
-        config = TangleConfig(
-            cycle_check_interval=999_999.0, resolution="cancel_youngest"
-        )
+        config = TangleConfig(cycle_check_interval=999_999.0, resolution="cancel_youngest")
         # No on_detection callback — AlertResolver succeeds normally
         monitor = TangleMonitor(
             config=config,

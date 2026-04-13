@@ -49,36 +49,24 @@ def _make_span(
     """Build a mock span with the given tangle attributes."""
     attrs: list[MockKeyValue] = []
     if agent_id is not None:
-        attrs.append(
-            MockKeyValue(key="tangle.agent.id", value=MockValue(string_value=agent_id))
-        )
+        attrs.append(MockKeyValue(key="tangle.agent.id", value=MockValue(string_value=agent_id)))
     if workflow_id is not None:
         attrs.append(
-            MockKeyValue(
-                key="tangle.workflow.id", value=MockValue(string_value=workflow_id)
-            )
+            MockKeyValue(key="tangle.workflow.id", value=MockValue(string_value=workflow_id))
         )
     if event_type is not None:
         attrs.append(
-            MockKeyValue(
-                key="tangle.event.type", value=MockValue(string_value=event_type)
-            )
+            MockKeyValue(key="tangle.event.type", value=MockValue(string_value=event_type))
         )
     if target_agent is not None:
         attrs.append(
-            MockKeyValue(
-                key="tangle.target.agent", value=MockValue(string_value=target_agent)
-            )
+            MockKeyValue(key="tangle.target.agent", value=MockValue(string_value=target_agent))
         )
     if resource is not None:
-        attrs.append(
-            MockKeyValue(key="tangle.resource", value=MockValue(string_value=resource))
-        )
+        attrs.append(MockKeyValue(key="tangle.resource", value=MockValue(string_value=resource)))
     if message_hash is not None:
         attrs.append(
-            MockKeyValue(
-                key="tangle.message.hash", value=MockValue(string_value=message_hash)
-            )
+            MockKeyValue(key="tangle.message.hash", value=MockValue(string_value=message_hash))
         )
     return MockSpan(start_time_unix_nano=start_time_ns, attributes=attrs)
 
@@ -145,9 +133,7 @@ class TestOtelSpanParser:
             start_time_unix_nano=1_000_000_000,
             attributes=[
                 MockKeyValue(key="http.method", value=MockValue(string_value="GET")),
-                MockKeyValue(
-                    key="http.url", value=MockValue(string_value="https://example.com")
-                ),
+                MockKeyValue(key="http.url", value=MockValue(string_value="https://example.com")),
             ],
         )
         assert parse_span_to_event(span) is None
@@ -272,15 +258,9 @@ class TestOtelIntValue:
         span = MockSpan(
             start_time_unix_nano=1_000_000_000,
             attributes=[
-                MockKeyValue(
-                    key="tangle.agent.id", value=MockValue(string_value="agent-A")
-                ),
-                MockKeyValue(
-                    key="tangle.workflow.id", value=MockValue(string_value="wf-1")
-                ),
-                MockKeyValue(
-                    key="tangle.event.type", value=MockValue(string_value="register")
-                ),
+                MockKeyValue(key="tangle.agent.id", value=MockValue(string_value="agent-A")),
+                MockKeyValue(key="tangle.workflow.id", value=MockValue(string_value="wf-1")),
+                MockKeyValue(key="tangle.event.type", value=MockValue(string_value="register")),
                 MockKeyValue(key="tangle.int.attr", value=IntValue(int_value=42)),
             ],
         )
@@ -298,15 +278,9 @@ class TestOtelIntValue:
         span = MockSpan(
             start_time_unix_nano=1_000_000_000,
             attributes=[
-                MockKeyValue(
-                    key="tangle.agent.id", value=MockValue(string_value="agent-A")
-                ),
-                MockKeyValue(
-                    key="tangle.workflow.id", value=MockValue(string_value="wf-1")
-                ),
-                MockKeyValue(
-                    key="tangle.event.type", value=MockValue(string_value="register")
-                ),
+                MockKeyValue(key="tangle.agent.id", value=MockValue(string_value="agent-A")),
+                MockKeyValue(key="tangle.workflow.id", value=MockValue(string_value="wf-1")),
+                MockKeyValue(key="tangle.event.type", value=MockValue(string_value="register")),
                 MockKeyValue(key="ignored.attr", value=EmptyValue(string_value="")),
             ],
         )

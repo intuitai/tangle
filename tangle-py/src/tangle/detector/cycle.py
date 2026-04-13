@@ -52,9 +52,7 @@ class CycleDetector:
 
         if dfs(start, 1):
             # Cycle: target -> ... -> path -> target
-            cycle_agents = (
-                [target] + path + [target] if path else [target, start, target]
-            )
+            cycle_agents = [target] + path + [target] if path else [target, start, target]
             # Deduplicate closing node
             cycle_agents_unique = cycle_agents[:-1]  # Remove the closing duplicate
 

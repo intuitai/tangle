@@ -8,21 +8,17 @@ from tangle.monitor import TangleMonitor
 from tangle.types import Edge, Event, EventType
 
 
-def _build_chain(
-    n: int, max_depth: int | None = None
-) -> tuple[WaitForGraph, CycleDetector, Edge]:
+def _build_chain(n: int, max_depth: int | None = None) -> tuple[WaitForGraph, CycleDetector, Edge]:
     """Build a chain of n agents: A0->A1->...->A(n-1). Returns (graph, detector, closing_edge)."""
     graph = WaitForGraph()
-    detector = CycleDetector(
-        graph, max_depth=max_depth if max_depth is not None else n + 1
-    )
+    detector = CycleDetector(graph, max_depth=max_depth if max_depth is not None else n + 1)
     for i in range(n):
         graph.register_agent(f"A{i}", "wf", float(i))
     # Add chain edges A0->A1, A1->A2, ..., A(n-2)->A(n-1)
     for i in range(n - 1):
         edge = Edge(
             from_agent=f"A{i}",
-            to_agent=f"A{i+1}",
+            to_agent=f"A{i + 1}",
             resource="r",
             created_at=float(i),
             workflow_id="wf",
@@ -30,7 +26,7 @@ def _build_chain(
         graph.add_edge(edge)
     # The closing edge completes the cycle: A(n-1)->A0
     closing = Edge(
-        from_agent=f"A{n-1}",
+        from_agent=f"A{n - 1}",
         to_agent="A0",
         resource="r",
         created_at=float(n),

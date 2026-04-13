@@ -31,7 +31,7 @@ uv run pytest --cov=tangle --cov-report=term-missing
 # Lint & format
 uv run ruff check src/ tests/          # lint
 uv run ruff check --fix src/ tests/    # lint + autofix
-uv run black src/ tests/               # format
+uv run ruff format src/ tests/         # format
 uv run mypy src/                       # type check
 ```
 
@@ -77,7 +77,7 @@ A background thread periodically runs `CycleDetector.full_scan()` (Kahn's algori
 
 - **Python 3.10** required (`requires-python = ">=3.10"`)
 - **Ruff** for linting (line-length=100, rules: E/F/I/UP/B/SIM/TCH)
-- **Black** for formatting
+- **Ruff** for formatting (via `ruff format`)
 - **Mypy** strict mode
 - **pytest-asyncio** with `asyncio_mode = "auto"` — async tests don't need the `@pytest.mark.asyncio` decorator
 - **Hypothesis** property-based tests exist in `tests/detector/test_cycle.py`

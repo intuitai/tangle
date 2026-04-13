@@ -55,9 +55,7 @@ class TangleMonitor:
         )
 
         self._graph = WaitForGraph()
-        self._cycle_detector = CycleDetector(
-            self._graph, max_depth=self._config.max_cycle_length
-        )
+        self._cycle_detector = CycleDetector(self._graph, max_depth=self._config.max_cycle_length)
         self._livelock_detector = LivelockDetector(
             window=self._config.livelock_window,
             min_repeats=self._config.livelock_min_repeats,
@@ -88,9 +86,7 @@ class TangleMonitor:
                 if resolution == "cancel_all"
                 else ResolutionAction.CANCEL_YOUNGEST
             )
-            self._resolver_chain.add(
-                CancelResolver(self._graph, cancel_fn=cancel_fn, mode=mode)
-            )
+            self._resolver_chain.add(CancelResolver(self._graph, cancel_fn=cancel_fn, mode=mode))
         if resolution == "tiebreaker":
             self._resolver_chain.add(
                 TiebreakerResolver(
@@ -212,9 +208,7 @@ class TangleMonitor:
             detection: Detection | None = None
 
             if event.type == EventType.REGISTER:
-                self._graph.register_agent(
-                    event.from_agent, event.workflow_id, event.timestamp
-                )
+                self._graph.register_agent(event.from_agent, event.workflow_id, event.timestamp)
 
             elif event.type == EventType.WAIT_FOR:
                 edge = Edge(
@@ -238,13 +232,9 @@ class TangleMonitor:
 
             elif event.type == EventType.RELEASE:
                 wf = event.workflow_id
-                self._graph.remove_edge(
-                    event.from_agent, event.to_agent, workflow_id=wf
-                )
+                self._graph.remove_edge(event.from_agent, event.to_agent, workflow_id=wf)
                 if self._graph.outgoing_count(event.from_agent, wf) == 0:
-                    self._graph.set_state(
-                        event.from_agent, AgentStatus.ACTIVE, workflow_id=wf
-                    )
+                    self._graph.set_state(event.from_agent, AgentStatus.ACTIVE, workflow_id=wf)
 
             elif event.type == EventType.SEND:
                 pattern = self._livelock_detector.on_message(
@@ -262,14 +252,10 @@ class TangleMonitor:
 
             elif event.type == EventType.COMPLETE:
                 wf = event.workflow_id
-                self._graph.set_state(
-                    event.from_agent, AgentStatus.COMPLETED, workflow_id=wf
-                )
+                self._graph.set_state(event.from_agent, AgentStatus.COMPLETED, workflow_id=wf)
                 # Remove all outgoing edges
                 for edge in self._graph.outgoing(event.from_agent, workflow_id=wf):
-                    self._graph.remove_edge(
-                        event.from_agent, edge.to_agent, workflow_id=wf
-                    )
+                    self._graph.remove_edge(event.from_agent, edge.to_agent, workflow_id=wf)
                 # Remove all inbound edges and unblock waiting agents
                 sources = self._graph.remove_inbound(event.from_agent, wf)
                 for src in sources:
@@ -278,13 +264,9 @@ class TangleMonitor:
 
             elif event.type == EventType.CANCEL:
                 wf = event.workflow_id
-                self._graph.set_state(
-                    event.from_agent, AgentStatus.CANCELED, workflow_id=wf
-                )
+                self._graph.set_state(event.from_agent, AgentStatus.CANCELED, workflow_id=wf)
                 for edge in self._graph.outgoing(event.from_agent, workflow_id=wf):
-                    self._graph.remove_edge(
-                        event.from_agent, edge.to_agent, workflow_id=wf
-                    )
+                    self._graph.remove_edge(event.from_agent, edge.to_agent, workflow_id=wf)
                 # Remove all inbound edges and unblock waiting agents
                 sources = self._graph.remove_inbound(event.from_agent, wf)
                 for src in sources:
@@ -324,8 +306,7 @@ class TangleMonitor:
             return [
                 d
                 for d in self._detections
-                if (d.cycle and not d.cycle.resolved)
-                or (d.livelock and not d.livelock.resolved)
+                if (d.cycle and not d.cycle.resolved) or (d.livelock and not d.livelock.resolved)
             ]
 
     def stats(self) -> dict[str, int]:

@@ -74,9 +74,7 @@ class TestDeadlockDetectionExample:
         assert detection.cycle is not None
         assert set(detection.cycle.agents) == {"agent_a", "agent_b"}
 
-    def test_stats_reflect_deadlock(
-        self, monitor: TangleMonitor, fake_clock: FakeClock
-    ) -> None:
+    def test_stats_reflect_deadlock(self, monitor: TangleMonitor, fake_clock: FakeClock) -> None:
         """stats() reports events_processed > 0 and active_detections > 0 after deadlock."""
         monitor.register(workflow_id="wf-stats", agent_id="agent_a")
         fake_clock.advance(1)

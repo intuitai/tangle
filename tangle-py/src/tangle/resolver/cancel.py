@@ -48,9 +48,7 @@ class CancelResolver:
             # Cancel youngest
             youngest = self._find_youngest(agents)
             if youngest:
-                self._cancel_fn(
-                    youngest, f"Canceled (youngest) due to {detection.type.value}"
-                )
+                self._cancel_fn(youngest, f"Canceled (youngest) due to {detection.type.value}")
                 logger.info("canceled_youngest_agent", agent=youngest)
 
     def _find_youngest(self, agents: list[AgentID]) -> AgentID | None:

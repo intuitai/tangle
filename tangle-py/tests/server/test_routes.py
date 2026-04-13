@@ -102,9 +102,7 @@ class TestPostEventBatch:
 
 
 class TestGetGraph:
-    async def test_get_graph(
-        self, client: httpx.AsyncClient, monitor: TangleMonitor
-    ) -> None:
+    async def test_get_graph(self, client: httpx.AsyncClient, monitor: TangleMonitor) -> None:
         """GET /v1/graph/{wf} returns 200 with populated graph."""
         # Set up some state via the monitor directly
         monitor.register("wf-graph", "A")
@@ -139,9 +137,7 @@ class TestGetGraph:
 
 
 class TestGetDetections:
-    async def test_get_detections(
-        self, client: httpx.AsyncClient, monitor: TangleMonitor
-    ) -> None:
+    async def test_get_detections(self, client: httpx.AsyncClient, monitor: TangleMonitor) -> None:
         """GET /v1/detections returns active detections as a list."""
         # Create a deadlock
         monitor.register("wf-det", "A")
@@ -167,9 +163,7 @@ class TestGetDetections:
 
 
 class TestGetStats:
-    async def test_get_stats(
-        self, client: httpx.AsyncClient, monitor: TangleMonitor
-    ) -> None:
+    async def test_get_stats(self, client: httpx.AsyncClient, monitor: TangleMonitor) -> None:
         """GET /v1/stats returns stats JSON."""
         monitor.register("wf-stats", "X")
 
@@ -222,9 +216,7 @@ class TestPostEventInvalidType:
 
 
 class TestPostEventHexFallback:
-    async def test_post_event_non_hex_message_body(
-        self, client: httpx.AsyncClient
-    ) -> None:
+    async def test_post_event_non_hex_message_body(self, client: httpx.AsyncClient) -> None:
         """Non-hex message_body falls back to .encode()."""
         payload = {
             "type": "send",

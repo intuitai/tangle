@@ -48,9 +48,7 @@ def tangle_node(monitor: TangleMonitor, agent_id: AgentID):
             if isinstance(result, dict):
                 for key in result:
                     if key not in _TANGLE_KEYS:
-                        body = xxhash.xxh128(
-                            f"{key}={repr(result[key])}".encode()
-                        ).digest()
+                        body = xxhash.xxh128(f"{key}={repr(result[key])}".encode()).digest()
                         monitor.process_event(
                             Event(
                                 type=EventType.SEND,

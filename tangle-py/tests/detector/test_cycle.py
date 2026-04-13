@@ -49,7 +49,6 @@ def _build_graph(
 
 
 class TestIncrementalCycleDetection:
-
     def test_cycle_2_agents(self) -> None:
         """A->B, B->A produces a 2-agent cycle."""
         g = _build_graph(["A", "B"], [("A", "B")])
@@ -163,7 +162,6 @@ class TestIncrementalCycleDetection:
 
 
 class TestDepthLimit:
-
     def test_depth_limit(self) -> None:
         """A cycle longer than max_depth is not detected by incremental search."""
         # Build a chain: 0->1->2->...->5->0, length 6
@@ -186,7 +184,6 @@ class TestDepthLimit:
 
 
 class TestEdgeRemoval:
-
     def test_edge_removal_breaks_cycle(self) -> None:
         """After removing one edge from a cycle, full_scan returns no cycles."""
         g = _build_graph(["A", "B", "C"], [("A", "B"), ("B", "C"), ("C", "A")])
@@ -208,7 +205,6 @@ class TestEdgeRemoval:
 
 
 class TestFullScan:
-
     def test_full_scan_finds_cycle(self) -> None:
         """Kahn's algorithm detects an existing cycle."""
         g = _build_graph(["A", "B", "C"], [("A", "B"), ("B", "C"), ("C", "A")])
@@ -261,7 +257,6 @@ class TestFullScan:
 
 
 class TestWorkflowIsolation:
-
     def test_workflow_isolation(self) -> None:
         """A cycle in wf-1 does not appear as a cycle in wf-2."""
         g = WaitForGraph()
@@ -295,7 +290,6 @@ class TestWorkflowIsolation:
 
 
 class TestConcurrency:
-
     def test_concurrent_edge_add(self) -> None:
         """50 threads adding edges simultaneously; detection still works without crashing."""
         g = WaitForGraph()
@@ -315,10 +309,7 @@ class TestConcurrency:
             except Exception as e:
                 errors.append(e)
 
-        threads = [
-            threading.Thread(target=add_and_detect, args=(i,))
-            for i in range(num_agents)
-        ]
+        threads = [threading.Thread(target=add_and_detect, args=(i,)) for i in range(num_agents)]
         for t in threads:
             t.start()
         for t in threads:
@@ -343,7 +334,6 @@ _edge_list_st = st.lists(_edge_st, min_size=0, max_size=15)
 
 
 class TestHypothesis:
-
     @given(edges=_edge_list_st)
     @settings(max_examples=100, deadline=5000)
     def test_cycle_detector_never_crashes(self, edges: list[tuple[str, str]]) -> None:
@@ -399,9 +389,9 @@ class TestHypothesis:
             pass  # This direction is always valid
         if incremental_found_cycle:
             # If incremental found a cycle, Kahn's must also find one.
-            assert (
-                full_scan_found_cycle
-            ), f"Incremental found cycle but full_scan did not. Edges: {edges}"
+            assert full_scan_found_cycle, (
+                f"Incremental found cycle but full_scan did not. Edges: {edges}"
+            )
 
 
 # ---------------------------------------------------------------------------
@@ -410,7 +400,6 @@ class TestHypothesis:
 
 
 class TestFullScanEdgeCases:
-
     def test_full_scan_empty_graph(self) -> None:
         """full_scan on an empty graph returns empty list."""
         g = WaitForGraph()

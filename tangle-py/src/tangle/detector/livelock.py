@@ -71,9 +71,7 @@ class LivelockDetector:
         # Keyed by (workflow_id, from_agent, to_agent) for isolation across workflows
         self._pair_buffers: dict[tuple[str, AgentID, AgentID], RingBuffer] = {}
         self._conversation_buffers: dict[str, RingBuffer] = {}
-        self._pair_agents: dict[str, set[tuple[AgentID, AgentID]]] = (
-            {}
-        )  # workflow -> set of pairs
+        self._pair_agents: dict[str, set[tuple[AgentID, AgentID]]] = {}  # workflow -> set of pairs
 
     def on_message(
         self,
@@ -115,9 +113,7 @@ class LivelockDetector:
 
         # Check conversation buffer
         agents = self._get_workflow_agents(workflow_id)
-        result = self._check_pattern(
-            self._conversation_buffers[workflow_id], agents, workflow_id
-        )
+        result = self._check_pattern(self._conversation_buffers[workflow_id], agents, workflow_id)
         return result
 
     def _get_workflow_agents(self, workflow_id: str) -> list[AgentID]:
@@ -138,9 +134,7 @@ class LivelockDetector:
         if len(digests) < self._min_pattern * self._min_repeats:
             return None
 
-        for pattern_len in range(
-            self._min_pattern, len(digests) // self._min_repeats + 1
-        ):
+        for pattern_len in range(self._min_pattern, len(digests) // self._min_repeats + 1):
             # Extract candidate pattern (last pattern_len digests)
             candidate = digests[-pattern_len:]
             # Count consecutive repeats scanning backward

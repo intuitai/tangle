@@ -92,9 +92,7 @@ class TestOTelE2E:
 
             request = trace_service_pb2.ExportTraceServiceRequest(
                 resource_spans=[
-                    trace_pb2.ResourceSpans(
-                        scope_spans=[trace_pb2.ScopeSpans(spans=spans)]
-                    )
+                    trace_pb2.ResourceSpans(scope_spans=[trace_pb2.ScopeSpans(spans=spans)])
                 ]
             )
             stub.Export(request)

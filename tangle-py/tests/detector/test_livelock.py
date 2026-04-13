@@ -10,7 +10,6 @@ from tangle.detector.livelock import LivelockDetector, RingBuffer
 
 
 class TestRingBuffer:
-
     def test_ring_buffer_append(self) -> None:
         """Items are stored in insertion order before capacity is reached."""
         buf = RingBuffer(capacity=5)
@@ -62,7 +61,6 @@ class TestRingBuffer:
 
 
 class TestLivelockSingleDirection:
-
     def test_livelock_exact_match_single_direction(self) -> None:
         """Same message A->B repeated min_repeats times is detected as livelock."""
         det = LivelockDetector(window=50, min_repeats=3, min_pattern=1)
@@ -76,7 +74,6 @@ class TestLivelockSingleDirection:
 
 
 class TestLivelockPingPong:
-
     def test_livelock_pingpong_detected(self) -> None:
         """A->B 'req' + B->A 'rej' repeated 3+ times detected via conversation buffer."""
         det = LivelockDetector(window=50, min_repeats=3, min_pattern=2)
@@ -96,7 +93,6 @@ class TestLivelockPingPong:
 
 
 class TestLivelockThreshold:
-
     def test_livelock_below_threshold(self) -> None:
         """Only 2 repetitions with min_repeats=3 is not detected."""
         det = LivelockDetector(window=50, min_repeats=3, min_pattern=1)
@@ -108,7 +104,6 @@ class TestLivelockThreshold:
 
 
 class TestLivelockPatternLengths:
-
     def test_livelock_pattern_length_2(self) -> None:
         """A 2-message pattern repeating 3+ times is detected."""
         det = LivelockDetector(window=50, min_repeats=3, min_pattern=2)
@@ -139,7 +134,6 @@ class TestLivelockPatternLengths:
 
 
 class TestLivelockNoPattern:
-
     def test_livelock_no_pattern(self) -> None:
         """Random distinct messages produce no pattern detection."""
         det = LivelockDetector(window=50, min_repeats=3, min_pattern=2)
@@ -151,7 +145,6 @@ class TestLivelockNoPattern:
 
 
 class TestLivelockProgress:
-
     def test_livelock_progress_resets(self) -> None:
         """Reporting progress resets buffers, preventing false positive detection."""
         det = LivelockDetector(window=50, min_repeats=3, min_pattern=1)
@@ -172,7 +165,6 @@ class TestLivelockProgress:
 
 
 class TestLivelockMultiPair:
-
     def test_livelock_multi_pair(self) -> None:
         """A-B livelock detection doesn't affect C-D pair."""
         det = LivelockDetector(window=50, min_repeats=3, min_pattern=1)
@@ -189,7 +181,6 @@ class TestLivelockMultiPair:
 
 
 class TestLivelockWindowBoundary:
-
     def test_livelock_window_boundary(self) -> None:
         """Pattern spanning the window boundary edge: messages outside the window are ignored."""
         # Small window of 6, min_repeats=3, min_pattern=1
@@ -209,7 +200,6 @@ class TestLivelockWindowBoundary:
 
 
 class TestLivelockConversationVsPair:
-
     def test_livelock_conversation_vs_pair(self) -> None:
         """Conversation buffer catches ping-pong that pair buffer misses.
 
@@ -235,7 +225,6 @@ class TestLivelockConversationVsPair:
 
 
 class TestLivelockWorkflowIsolation:
-
     def test_same_pair_different_workflows_no_cross_trigger(self) -> None:
         """Same (from_agent, to_agent) pair in two workflows must not share buffers."""
         det = LivelockDetector(window=50, min_repeats=3, min_pattern=1)
@@ -290,7 +279,6 @@ class TestLivelockWorkflowIsolation:
 
 
 class TestLivelockClearWorkflow:
-
     def test_livelock_clear_workflow(self) -> None:
         """clear_workflow removes all buffers for that workflow."""
         det = LivelockDetector(window=50, min_repeats=3, min_pattern=1)
@@ -318,7 +306,6 @@ class TestLivelockClearWorkflow:
 
 
 class TestLivelockProgressUnknown:
-
     def test_report_progress_unknown_workflow(self) -> None:
         """report_progress on unknown workflow is a no-op."""
         det = LivelockDetector(window=50, min_repeats=3, min_pattern=1)
@@ -326,7 +313,6 @@ class TestLivelockProgressUnknown:
 
 
 class TestRingBufferEdgeCases:
-
     def test_last_n_greater_than_count(self) -> None:
         """last_n with n > number of items returns all items."""
         buf = RingBuffer(capacity=10)

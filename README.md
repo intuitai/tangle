@@ -391,8 +391,8 @@ The test suite contains **210 tests** across 14 test files:
 ### Linting and formatting
 
 ```bash
-# Format with black
-uv run black src/ tests/
+# Format with ruff
+uv run ruff format src/ tests/
 
 # Lint with ruff
 uv run ruff check src/ tests/

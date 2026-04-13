@@ -137,9 +137,7 @@ class TestSnapshotFromJsonErrors:
 class TestSnapshotToDotMissingState:
     def test_to_dot_node_without_state(self) -> None:
         """to_dot defaults to ACTIVE for nodes without a state entry."""
-        snap = GraphSnapshot(
-            nodes=["A", "B"], edges=[], states={"A": AgentStatus.WAITING}
-        )
+        snap = GraphSnapshot(nodes=["A", "B"], edges=[], states={"A": AgentStatus.WAITING})
         dot = snap.to_dot()
         assert '"B" [label="B (active)"]' in dot
         assert '"A" [label="A (waiting)"]' in dot

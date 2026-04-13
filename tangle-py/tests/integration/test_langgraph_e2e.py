@@ -84,9 +84,9 @@ class TestLangGraphE2E:
 
         # After many iterations, livelock should be detected
         detections = monitor.active_detections()
-        assert any(
-            d.type.value == "livelock" for d in detections
-        ), f"Expected livelock detection, got {len(detections)} detections"
+        assert any(d.type.value == "livelock" for d in detections), (
+            f"Expected livelock detection, got {len(detections)} detections"
+        )
 
     def test_deadlock_via_conditional_edges(self):
         """Two nodes with conditional edges pointing at each other creating WaitFor cycle."""
@@ -99,9 +99,7 @@ class TestLangGraphE2E:
         monitor.register(workflow_id="wf-dl", agent_id="A")
         monitor.register(workflow_id="wf-dl", agent_id="B")
         clock.advance(1)
-        monitor.wait_for(
-            workflow_id="wf-dl", from_agent="A", to_agent="B", resource="data"
-        )
+        monitor.wait_for(workflow_id="wf-dl", from_agent="A", to_agent="B", resource="data")
         clock.advance(1)
         detection = monitor.process_event(
             Event(

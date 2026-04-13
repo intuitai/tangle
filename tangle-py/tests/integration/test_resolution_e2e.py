@@ -106,13 +106,9 @@ class TestResolutionE2E:
         # Create livelock: repeated ping-pong
         for _ in range(5):
             clock.advance(1)
-            monitor.send(
-                workflow_id="wf-tb", from_agent="A", to_agent="B", body=b"request"
-            )
+            monitor.send(workflow_id="wf-tb", from_agent="A", to_agent="B", body=b"request")
             clock.advance(1)
-            monitor.send(
-                workflow_id="wf-tb", from_agent="B", to_agent="A", body=b"reject"
-            )
+            monitor.send(workflow_id="wf-tb", from_agent="B", to_agent="A", body=b"reject")
 
         assert len(tiebreaker_calls) >= 1
         # Default tiebreaker prompt contains "loop" or "stuck"

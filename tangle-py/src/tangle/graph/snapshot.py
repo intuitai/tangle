@@ -38,9 +38,7 @@ class GraphSnapshot:
             lines.append(f'  "{node}" [label="{node} ({state.value})"];')
         for edge in self.edges:
             label = edge.resource or ""
-            lines.append(
-                f'  "{edge.from_agent}" -> "{edge.to_agent}" [label="{label}"];'
-            )
+            lines.append(f'  "{edge.from_agent}" -> "{edge.to_agent}" [label="{label}"];')
         lines.append("}")
         return "\n".join(lines)
 
