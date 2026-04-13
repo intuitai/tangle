@@ -19,8 +19,16 @@ from tangle.resolver.escalate import EscalateResolver
 from tangle.resolver.tiebreaker import TiebreakerResolver
 from tangle.store.memory import MemoryStore
 from tangle.store.sqlite import SQLiteStore
-from tangle.types import (AgentID, AgentStatus, Detection, DetectionType, Edge,
-                          Event, EventType, Severity)
+from tangle.types import (
+    AgentID,
+    AgentStatus,
+    Detection,
+    DetectionType,
+    Edge,
+    Event,
+    EventType,
+    Severity,
+)
 
 logger = structlog.get_logger("tangle")
 

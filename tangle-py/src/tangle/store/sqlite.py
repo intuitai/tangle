@@ -4,8 +4,15 @@ import json
 import sqlite3
 import threading
 
-from tangle.types import (Cycle, Detection, DetectionType, Event, EventType,
-                          LivelockPattern, Severity)
+from tangle.types import (
+    Cycle,
+    Detection,
+    DetectionType,
+    Event,
+    EventType,
+    LivelockPattern,
+    Severity,
+)
 
 
 class SQLiteStore:

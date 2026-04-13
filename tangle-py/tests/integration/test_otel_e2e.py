@@ -12,7 +12,9 @@ class TestOTelE2E:
         try:
             import grpc
             from opentelemetry.proto.collector.trace.v1 import (
-                trace_service_pb2, trace_service_pb2_grpc)
+                trace_service_pb2,
+                trace_service_pb2_grpc,
+            )
             from opentelemetry.proto.common.v1 import common_pb2
             from opentelemetry.proto.trace.v1 import trace_pb2
         except ImportError:

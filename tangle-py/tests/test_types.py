@@ -6,9 +6,18 @@ import dataclasses
 
 import pytest
 
-from tangle.types import (AgentStatus, Cycle, Detection, DetectionType, Edge,
-                          Event, EventType, LivelockPattern, ResolutionAction,
-                          Severity)
+from tangle.types import (
+    AgentStatus,
+    Cycle,
+    Detection,
+    DetectionType,
+    Edge,
+    Event,
+    EventType,
+    LivelockPattern,
+    ResolutionAction,
+    Severity,
+)
 
 
 class TestEventFrozen:
