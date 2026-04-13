@@ -317,6 +317,29 @@ The `cancel_youngest` resolver cancels the most recently registered agent to bre
 the cycle. Swap it for `cancel_all`, `tiebreaker`, or `escalate` in `TangleConfig`
 to change the resolution behavior.
 
+### Customer support escalation (livelock + deadlock)
+
+The `tangle-py/examples/customer_support_escalation.py` script demonstrates both
+failure modes in a four-agent support pipeline — triage, researcher, drafter, and
+reviewer:
+
+```
+triage -> researcher -> drafter <-> reviewer (reject/revise loop)
+            ^                          |
+            └──────────────────────────┘  (circular wait)
+```
+
+1. **Livelock:** The drafter and reviewer exchange the same reject/revise messages
+   in a loop. Tangle detects the repeated pattern and injects a tiebreaker prompt.
+2. **Deadlock:** All four agents form a circular wait. Tangle detects the cycle
+   instantly via incremental DFS.
+
+No external dependencies — uses the SDK directly (no LangGraph required):
+
+```bash
+cd tangle-py && uv run python examples/customer_support_escalation.py
+```
+
 ## Configuration
 
 `TangleConfig` is a Pydantic model. All fields have sensible defaults:
