@@ -1,6 +1,7 @@
 # src/tangle/server/routes.py
 
 from fastapi import APIRouter, Request
+from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel
 
 from tangle.types import Event, EventType
@@ -111,3 +112,19 @@ async def get_detections(request: Request):
 async def get_stats(request: Request):
     monitor = request.app.state.monitor
     return monitor.stats()
+
+
+@router.get("/metrics", response_class=PlainTextResponse)
+async def get_metrics(request: Request):
+    monitor = request.app.state.monitor
+    if monitor.metrics is None:
+        return PlainTextResponse(
+            "Metrics not enabled. Set metrics_enabled=True in TangleConfig.\n",
+            status_code=404,
+        )
+    from prometheus_client import generate_latest
+
+    return PlainTextResponse(
+        generate_latest(monitor.metrics.registry),
+        media_type="text/plain; version=0.0.4; charset=utf-8",
+    )

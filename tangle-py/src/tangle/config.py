@@ -52,5 +52,10 @@ class TangleConfig(BaseModel):
         description="OTel service.name resource attribute",
     )
 
+    metrics_enabled: bool = Field(default=False, description="Enable Prometheus metrics collection")
+    metrics_port: int = Field(
+        default=9090, description="Port for standalone Prometheus metrics HTTP server"
+    )
+
     server_host: str = Field(default="0.0.0.0")
     server_port: int = Field(default=8090)

@@ -994,6 +994,15 @@ wheels = [
 ]
 
 [[package]]
+name = "prometheus-client"
+version = "0.25.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/1b/fb/d9aa83ffe43ce1f19e557c0971d04b90561b0cfd50762aafb01968285553/prometheus_client-0.25.0.tar.gz", hash = "sha256:5e373b75c31afb3c86f1a52fa1ad470c9aace18082d39ec0d2f918d11cc9ba28", size = 86035, upload-time = "2026-04-09T19:53:42.359Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/8d/9b/d4b1e644385499c8346fa9b622a3f030dce14cd6ef8a1871c221a17a67e7/prometheus_client-0.25.0-py3-none-any.whl", hash = "sha256:d5aec89e349a6ec230805d0df882f3807f74fd6c1a2fa86864e3c2279059fed1", size = 64154, upload-time = "2026-04-09T19:53:41.324Z" },
+]
+
+[[package]]
 name = "protobuf"
 version = "6.33.6"
 source = { registry = "https://pypi.org/simple" }
@@ -1396,6 +1405,9 @@ langgraph = [
     { name = "langchain-core" },
     { name = "langgraph" },
 ]
+metrics = [
+    { name = "prometheus-client" },
+]
 otel = [
     { name = "opentelemetry-api" },
     { name = "opentelemetry-exporter-otlp-proto-grpc" },
@@ -1413,6 +1425,7 @@ dev = [
     { name = "httpx" },
     { name = "hypothesis" },
     { name = "mypy" },
+    { name = "prometheus-client" },
     { name = "pytest" },
     { name = "pytest-asyncio" },
     { name = "pytest-benchmark" },
@@ -1431,12 +1444,13 @@ requires-dist = [
     { name = "opentelemetry-api", marker = "extra == 'otel'", specifier = ">=1.29" },
     { name = "opentelemetry-exporter-otlp-proto-grpc", marker = "extra == 'otel'", specifier = ">=1.29" },
     { name = "opentelemetry-sdk", marker = "extra == 'otel'", specifier = ">=1.29" },
+    { name = "prometheus-client", marker = "extra == 'metrics'", specifier = ">=0.21" },
     { name = "pydantic", specifier = ">=2.10" },
     { name = "structlog", specifier = ">=24.4" },
     { name = "uvicorn", marker = "extra == 'server'", specifier = ">=0.34" },
     { name = "xxhash", specifier = ">=3.5.0" },
 ]
-provides-extras = ["langgraph", "server", "otel"]
+provides-extras = ["langgraph", "server", "otel", "metrics"]
 
 [package.metadata.requires-dev]
 dev = [
@@ -1445,6 +1459,7 @@ dev = [
     { name = "httpx", specifier = ">=0.28" },
     { name = "hypothesis", specifier = ">=6.120" },
     { name = "mypy", specifier = ">=1.14" },
+    { name = "prometheus-client", specifier = ">=0.21" },
     { name = "pytest", specifier = ">=8.3" },
     { name = "pytest-asyncio", specifier = ">=0.25" },
     { name = "pytest-benchmark", specifier = ">=4.0" },

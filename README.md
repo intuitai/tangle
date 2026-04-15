@@ -462,6 +462,25 @@ tangle-py/
   pyproject.toml         # Build config, dependencies, tool settings
 ```
 
+## Compatibility and Versioning
+
+Tangle follows [Semantic Versioning](https://semver.org/). For full details see:
+
+- **[COMPATIBILITY.md](COMPATIBILITY.md)** — supported Python versions,
+  framework version matrix, integration tiers (Tier 1 vs best-effort), and
+  upgrade policy.
+- **[CHANGELOG.md](CHANGELOG.md)** — release notes, breaking changes, and
+  migration instructions.
+
+**Integration tiers at a glance:**
+
+| Integration        | Tier          | Status                      |
+|--------------------|---------------|-----------------------------|
+| Core SDK           | Tier 1        | Fully tested, prompt fixes  |
+| LangGraph          | Tier 1        | Fully tested, prompt fixes  |
+| FastAPI Server     | Tier 1        | Fully tested, prompt fixes  |
+| OpenTelemetry      | Tier 2        | Tested, best-effort support |
+
 ## License
 
 Apache 2.0

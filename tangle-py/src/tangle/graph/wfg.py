@@ -118,6 +118,11 @@ class WaitForGraph:
         with self._lock:
             return len(self._states)
 
+    def workflow_count(self) -> int:
+        """Return the number of workflows with at least one registered agent."""
+        with self._lock:
+            return sum(1 for agents in self._workflow_agents.values() if agents)
+
     def agents_in_workflow(self, workflow_id: str) -> list[AgentID]:
         with self._lock:
             return list(self._workflow_agents.get(workflow_id, set()))

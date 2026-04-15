@@ -41,6 +41,9 @@ otel = [
     "opentelemetry-sdk>=1.29",
     "opentelemetry-exporter-otlp-proto-grpc>=1.29",
 ]
+metrics = [
+    "prometheus-client>=0.21",
+]
 
 [project.scripts]
 tangle = "tangle.cli:main"
@@ -63,6 +66,7 @@ dev = [
     "ruff>=0.8",
     "mypy>=1.14",
     "httpx>=0.28",
+    "prometheus-client>=0.21",
     "fastapi>=0.115",
     "uvicorn>=0.34",
     "grpcio>=1.68",

@@ -1,10 +1,17 @@
 # src/tangle/monitor.py
 
+from __future__ import annotations
+
 import threading
 import time
-from collections.abc import Callable
+from typing import TYPE_CHECKING
 
 import structlog
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
+    from tangle.metrics import TangleMetrics
 
 from tangle.config import TangleConfig
 from tangle.detector.cycle import CycleDetector
@@ -101,10 +108,21 @@ class TangleMonitor:
                 )
             )
 
+        # Metrics
+        self._metrics: TangleMetrics | None = None
+        if self._config.metrics_enabled:
+            from tangle.metrics import TangleMetrics as _TangleMetrics
+
+            self._metrics = _TangleMetrics()
+
         # Background scan
         self._scan_thread: threading.Thread | None = None
         self._stop_event = threading.Event()
         self._otel_collector = None
+
+    @property
+    def metrics(self) -> TangleMetrics | None:
+        return self._metrics
 
     def clock(self) -> float:
         return self._clock()
@@ -204,6 +222,8 @@ class TangleMonitor:
         with self._lock:
             self._events_processed += 1
             self._store.record_event(event)
+            if self._metrics:
+                self._metrics.record_event(event.type.value)
 
             detection: Detection | None = None
 
@@ -279,10 +299,19 @@ class TangleMonitor:
             if detection:
                 self._detections.append(detection)
                 self._store.record_detection(detection)
+                if self._metrics:
+                    self._metrics.record_detection(detection)
                 try:
                     self._resolver_chain.resolve(detection)
                 except Exception:
                     logger.exception("resolver_chain_failed")
+
+            if self._metrics and event.type in (
+                EventType.REGISTER,
+                EventType.COMPLETE,
+                EventType.CANCEL,
+            ):
+                self._metrics.set_active_workflows(self._graph.workflow_count())
 
             return detection
 
@@ -356,6 +385,8 @@ class TangleMonitor:
                         )
                         self._detections.append(detection)
                         self._store.record_detection(detection)
+                        if self._metrics:
+                            self._metrics.record_detection(detection)
                         try:
                             self._resolver_chain.resolve(detection)
                         except Exception:
@@ -383,7 +414,7 @@ class TangleMonitor:
                 )
             ]
 
-    def __enter__(self) -> "TangleMonitor":
+    def __enter__(self) -> TangleMonitor:
         self.start_background()
         return self
 
