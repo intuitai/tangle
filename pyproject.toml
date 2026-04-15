@@ -14,17 +14,18 @@ keywords = [
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
-    "License :: OSI Approved :: MIT License",
+    "License :: OSI Approved :: Apache Software License",
     "Programming Language :: Python :: 3.10",
     "Topic :: Software Development :: Libraries",
     "Topic :: System :: Monitoring",
 ]
 
+readme = "README.md"
+
 dependencies = [
     "xxhash>=3.5.0",
     "pydantic>=2.10",
     "structlog>=24.4",
-    "isort>=8.0.1",
 ]
 
 [project.optional-dependencies]
@@ -45,6 +46,12 @@ metrics = [
     "prometheus-client>=0.21",
 ]
 
+[project.urls]
+Homepage = "https://github.com/nobelk/tangle"
+Repository = "https://github.com/nobelk/tangle"
+Changelog = "https://github.com/nobelk/tangle/blob/main/CHANGELOG.md"
+"Bug Tracker" = "https://github.com/nobelk/tangle/issues"
+
 [project.scripts]
 tangle = "tangle.cli:main"
 
@@ -54,6 +61,22 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/tangle"]
+
+[tool.hatch.build.targets.sdist]
+exclude = [
+    "/.github",
+    "/tests",
+    "/examples",
+    "/Dockerfile*",
+    "/docker-compose.yml",
+    "/Makefile",
+    "/.python-version",
+    "/uv.lock",
+    "/tangle-python-design-doc-v3.md",
+    "/CLAUDE.md",
+    "/COMPATIBILITY.md",
+    "/.claude",
+]
 
 [dependency-groups]
 dev = [

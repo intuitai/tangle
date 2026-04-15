@@ -4,11 +4,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-Tangle is a Python library for detecting deadlocks and livelocks in multi-agent AI workflows. The code lives in `tangle-py/`. It works as an embedded library, a FastAPI sidecar, or via OpenTelemetry spans.
+Tangle is a Python library for detecting deadlocks and livelocks in multi-agent AI workflows. It works as an embedded library, a FastAPI sidecar, or via OpenTelemetry spans. Published to PyPI as `tangle-detect`.
 
 ## Build & Run Commands
 
-All commands run from `tangle-py/`:
+All commands run from the repo root:
 
 ```bash
 # Install (core + dev + all optional extras)
