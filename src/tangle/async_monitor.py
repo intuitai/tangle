@@ -104,24 +104,24 @@ class AsyncTangleMonitor:
         )
         self._resolver_chain.add(AlertResolver(on_detection=on_detection))
 
-        resolution = self._config.resolution
-        if resolution in ("cancel_youngest", "cancel_all"):
-            from tangle.types import ResolutionAction
+        from tangle.types import ResolutionAction
 
+        resolution = ResolutionAction(self._config.resolution)
+        if resolution in (ResolutionAction.CANCEL_YOUNGEST, ResolutionAction.CANCEL_ALL):
             mode = (
                 ResolutionAction.CANCEL_ALL
-                if resolution == "cancel_all"
+                if resolution == ResolutionAction.CANCEL_ALL
                 else ResolutionAction.CANCEL_YOUNGEST
             )
             self._resolver_chain.add(CancelResolver(self._graph, cancel_fn=cancel_fn, mode=mode))
-        if resolution == "tiebreaker":
+        if resolution == ResolutionAction.TIEBREAKER:
             self._resolver_chain.add(
                 TiebreakerResolver(
                     tiebreaker_fn=tiebreaker_fn,
                     prompt=self._config.tiebreaker_prompt,
                 )
             )
-        if resolution == "escalate":
+        if resolution == ResolutionAction.ESCALATE:
             self._resolver_chain.add(
                 EscalateResolver(
                     webhook_url=self._config.escalation_webhook_url,

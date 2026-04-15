@@ -54,7 +54,7 @@ class SQLiteStore:
             if detection.cycle
             else (detection.livelock.workflow_id if detection.livelock else "")
         )
-        data: dict = {
+        data: dict[str, object] = {
             "type": detection.type.value,
             "severity": detection.severity.value,
         }
@@ -156,7 +156,7 @@ class SQLiteStore:
         with self._lock, contextlib.suppress(Exception):
             self._conn.close()
 
-    def _row_to_detection(self, row: tuple) -> Detection:
+    def _row_to_detection(self, row: tuple[str, str, str]) -> Detection:
         data = json.loads(row[2])
         dtype = DetectionType(row[0])
         severity = Severity(row[1])

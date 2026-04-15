@@ -12,7 +12,7 @@ from tangle.types import AgentID, Event, EventType
 _TANGLE_KEYS = {"tangle_workflow_id"}
 
 
-def tangle_node(monitor: TangleMonitor, agent_id: AgentID):
+def tangle_node(monitor: TangleMonitor, agent_id: AgentID) -> Callable[..., Any]:
     """Decorator that instruments a LangGraph node function."""
 
     def decorator(fn: Callable[..., Any]) -> Callable[..., Any]:
@@ -33,7 +33,7 @@ def tangle_node(monitor: TangleMonitor, agent_id: AgentID):
                 )
 
             try:
-                result = fn(state, *args, **kwargs)
+                result: dict[str, Any] = fn(state, *args, **kwargs)
             except Exception:
                 monitor.process_event(
                     Event(
@@ -68,13 +68,13 @@ def tangle_node(monitor: TangleMonitor, agent_id: AgentID):
     return decorator
 
 
-def tangle_conditional_edge(monitor: TangleMonitor, from_agent: AgentID):
+def tangle_conditional_edge(monitor: TangleMonitor, from_agent: AgentID) -> Callable[..., Any]:
     """Decorator for LangGraph conditional edge functions."""
 
     def decorator(fn: Callable[..., Any]) -> Callable[..., Any]:
         @wraps(fn)
         def wrapper(state: dict[str, Any], *args: Any, **kwargs: Any) -> str:
-            result = fn(state, *args, **kwargs)
+            result: str = fn(state, *args, **kwargs)
             workflow_id = state.get("tangle_workflow_id", "default")
 
             if result and result != "__end__":

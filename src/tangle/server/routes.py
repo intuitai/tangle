@@ -1,5 +1,7 @@
 # src/tangle/server/routes.py
 
+from typing import Any
+
 from fastapi import APIRouter, Request
 from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel
@@ -23,7 +25,7 @@ class BatchEventRequest(BaseModel):
     events: list[EventRequest]
 
 
-def _to_event(req: EventRequest, monitor) -> Event:
+def _to_event(req: EventRequest, monitor: Any) -> Event:
     try:
         body = bytes.fromhex(req.message_body) if req.message_body else b""
     except ValueError:
@@ -40,7 +42,7 @@ def _to_event(req: EventRequest, monitor) -> Event:
 
 
 @router.post("/events", status_code=202)
-async def post_event(req: EventRequest, request: Request):
+async def post_event(req: EventRequest, request: Request) -> dict[str, object]:
     monitor = request.app.state.monitor
     event = _to_event(req, monitor)
     detection = monitor.process_event(event)
@@ -48,7 +50,7 @@ async def post_event(req: EventRequest, request: Request):
 
 
 @router.post("/events/batch", status_code=202)
-async def post_event_batch(req: BatchEventRequest, request: Request):
+async def post_event_batch(req: BatchEventRequest, request: Request) -> dict[str, object]:
     monitor = request.app.state.monitor
     detections = 0
     for event_req in req.events:
@@ -60,7 +62,7 @@ async def post_event_batch(req: BatchEventRequest, request: Request):
 
 
 @router.get("/graph/{workflow_id}")
-async def get_graph(workflow_id: str, request: Request):
+async def get_graph(workflow_id: str, request: Request) -> dict[str, object]:
     monitor = request.app.state.monitor
     snapshot = monitor.snapshot(workflow_id)
     return {
@@ -78,7 +80,7 @@ async def get_graph(workflow_id: str, request: Request):
 
 
 @router.get("/detections")
-async def get_detections(request: Request):
+async def get_detections(request: Request) -> list[dict[str, object]]:
     monitor = request.app.state.monitor
     detections = monitor.active_detections()
     return [
@@ -109,13 +111,14 @@ async def get_detections(request: Request):
 
 
 @router.get("/stats")
-async def get_stats(request: Request):
+async def get_stats(request: Request) -> dict[str, int]:
     monitor = request.app.state.monitor
-    return monitor.stats()
+    result: dict[str, int] = monitor.stats()
+    return result
 
 
 @router.get("/metrics", response_class=PlainTextResponse)
-async def get_metrics(request: Request):
+async def get_metrics(request: Request) -> PlainTextResponse:
     monitor = request.app.state.monitor
     if monitor.metrics is None:
         return PlainTextResponse(

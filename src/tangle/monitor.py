@@ -11,6 +11,7 @@ import structlog
 if TYPE_CHECKING:
     from collections.abc import Callable
 
+    from tangle.integrations.otel import OTelCollector
     from tangle.metrics import TangleMetrics
 
 from tangle.config import TangleConfig
@@ -76,6 +77,7 @@ class TangleMonitor:
         self._events_processed = 0
 
         # Store
+        self._store: MemoryStore | SQLiteStore
         if self._config.store_backend == "sqlite":
             self._store = SQLiteStore(self._config.sqlite_path)
         else:
@@ -95,24 +97,24 @@ class TangleMonitor:
         )
         self._resolver_chain.add(AlertResolver(on_detection=on_detection))
 
-        resolution = self._config.resolution
-        if resolution in ("cancel_youngest", "cancel_all"):
-            from tangle.types import ResolutionAction
+        from tangle.types import ResolutionAction
 
+        resolution = ResolutionAction(self._config.resolution)
+        if resolution in (ResolutionAction.CANCEL_YOUNGEST, ResolutionAction.CANCEL_ALL):
             mode = (
                 ResolutionAction.CANCEL_ALL
-                if resolution == "cancel_all"
+                if resolution == ResolutionAction.CANCEL_ALL
                 else ResolutionAction.CANCEL_YOUNGEST
             )
             self._resolver_chain.add(CancelResolver(self._graph, cancel_fn=cancel_fn, mode=mode))
-        if resolution == "tiebreaker":
+        if resolution == ResolutionAction.TIEBREAKER:
             self._resolver_chain.add(
                 TiebreakerResolver(
                     tiebreaker_fn=tiebreaker_fn,
                     prompt=self._config.tiebreaker_prompt,
                 )
             )
-        if resolution == "escalate":
+        if resolution == ResolutionAction.ESCALATE:
             self._resolver_chain.add(
                 EscalateResolver(
                     webhook_url=self._config.escalation_webhook_url,
@@ -129,7 +131,7 @@ class TangleMonitor:
         # Background scan
         self._scan_thread: threading.Thread | None = None
         self._stop_event = threading.Event()
-        self._otel_collector = None
+        self._otel_collector: OTelCollector | None = None
 
     @property
     def metrics(self) -> TangleMetrics | None:

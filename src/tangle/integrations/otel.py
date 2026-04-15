@@ -1,7 +1,9 @@
 # src/tangle/integrations/otel.py
 
+from __future__ import annotations
+
 from concurrent import futures
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import structlog
 
@@ -11,7 +13,7 @@ if TYPE_CHECKING:
     from tangle.monitor import TangleMonitor
 
 try:
-    import grpc
+    import grpc  # type: ignore[import-untyped]
     from opentelemetry.proto.collector.trace.v1 import (
         trace_service_pb2,
         trace_service_pb2_grpc,
@@ -45,7 +47,7 @@ _EVENT_TYPE_MAP = {
 }
 
 
-def _extract_attributes(span) -> dict[str, str]:
+def _extract_attributes(span: Any) -> dict[str, str]:
     """Extract key-value attributes from an OTel span."""
     attrs: dict[str, str] = {}
     for kv in span.attributes:
@@ -58,7 +60,7 @@ def _extract_attributes(span) -> dict[str, str]:
     return attrs
 
 
-def parse_span_to_event(span) -> Event | None:
+def parse_span_to_event(span: Any) -> Event | None:
     """Extract a Tangle Event from an OTel span."""
     attrs = _extract_attributes(span)
 
@@ -90,22 +92,22 @@ def parse_span_to_event(span) -> Event | None:
     )
 
 
-class TangleTraceServicer(_BASE_SERVICER):
+class TangleTraceServicer(_BASE_SERVICER):  # type: ignore[misc]
     """gRPC servicer that feeds OTel spans into TangleMonitor."""
 
-    def __init__(self, monitor: "TangleMonitor") -> None:
+    def __init__(self, monitor: TangleMonitor) -> None:
         self._monitor = monitor
 
-    def Export(self, request: object, context: object) -> object:
+    def Export(self, request: Any, context: Any) -> Any:
         if not _GRPC_AVAILABLE:
             raise RuntimeError("grpc/opentelemetry extras not installed")
-        for resource_spans in request.resource_spans:  # type: ignore[union-attr]
+        for resource_spans in request.resource_spans:
             for scope_spans in resource_spans.scope_spans:
                 for span in scope_spans.spans:
                     event = parse_span_to_event(span)
                     if event is not None:
                         self._monitor.process_event(event)
-        return trace_service_pb2.ExportTraceServiceResponse()  # type: ignore[union-attr]
+        return trace_service_pb2.ExportTraceServiceResponse()
 
 
 class OTelCollectorError(Exception):
@@ -115,23 +117,23 @@ class OTelCollectorError(Exception):
 class OTelCollector:
     """Background gRPC server that receives OTLP trace spans."""
 
-    def __init__(self, monitor: "TangleMonitor", port: int = 4317) -> None:
+    def __init__(self, monitor: TangleMonitor, port: int = 4317) -> None:
         self._monitor = monitor
         self._port = port
-        self._server: _ServerType | None = None
+        self._server: Any = None
 
     def start(self) -> None:
         if not _GRPC_AVAILABLE:
             raise OTelCollectorError("grpc extras not installed; install tangle[otel]")
-        self._server = grpc.server(futures.ThreadPoolExecutor(max_workers=4))  # type: ignore[union-attr]
-        trace_service_pb2_grpc.add_TraceServiceServicer_to_server(  # type: ignore[union-attr]
+        self._server = grpc.server(futures.ThreadPoolExecutor(max_workers=4))
+        trace_service_pb2_grpc.add_TraceServiceServicer_to_server(  # type: ignore[no-untyped-call]
             TangleTraceServicer(self._monitor), self._server
         )
-        self._server.add_insecure_port(f"[::]:{self._port}")  # type: ignore[union-attr]
-        self._server.start()  # type: ignore[union-attr]
+        self._server.add_insecure_port(f"[::]:{self._port}")
+        self._server.start()
         logger.info("otel_collector_started", port=self._port)
 
     def stop(self, grace: float = 5.0) -> None:
         if self._server:
-            self._server.stop(grace)  # type: ignore[union-attr]
+            self._server.stop(grace)
             logger.info("otel_collector_stopped")

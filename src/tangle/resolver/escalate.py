@@ -28,7 +28,7 @@ class EscalateResolver:
 
         import httpx
 
-        payload = {
+        payload: dict[str, object] = {
             "type": detection.type.value,
             "severity": detection.severity.value,
         }

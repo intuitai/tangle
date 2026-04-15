@@ -9,7 +9,7 @@ from tangle.monitor import TangleMonitor
 from tangle.server.app import create_app
 
 
-def main():
+def main() -> None:
     parser = argparse.ArgumentParser(description="Tangle sidecar server")
     parser.add_argument("--host", default="0.0.0.0")
     parser.add_argument("--port", type=int, default=8090)

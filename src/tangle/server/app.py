@@ -12,7 +12,7 @@ def create_app(monitor: TangleMonitor) -> FastAPI:
     app.include_router(router, prefix="/v1")
 
     @app.get("/healthz")
-    async def healthz():
+    async def healthz() -> dict[str, str]:
         return {"status": "ok"}
 
     return app
