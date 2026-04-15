@@ -4,6 +4,7 @@ import contextlib
 
 from tangle.config import TangleConfig
 from tangle.logging import configure_logging, shutdown_logging
+from tangle.async_monitor import AsyncTangleMonitor
 from tangle.monitor import TangleMonitor
 
 with contextlib.suppress(ImportError):
@@ -25,6 +26,7 @@ from tangle.types import (
 __all__ = [
     "TangleConfig",
     "TangleMetrics",
+    "AsyncTangleMonitor",
     "TangleMonitor",
     "configure_logging",
     "shutdown_logging",
