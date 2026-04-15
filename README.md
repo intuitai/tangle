@@ -358,6 +358,127 @@ cd tangle-py && uv run python examples/customer_support_escalation.py
 Resolution actions: `alert`, `cancel_youngest`, `cancel_all`, `tiebreaker`,
 `escalate`.
 
+## Detection Tuning Guide
+
+Livelock and deadlock detection have five key parameters that control
+sensitivity. The right values depend on your workflow shape — too aggressive
+and you get false positives during normal retries; too lenient and genuine
+livelocks go unnoticed.
+
+### Parameter reference
+
+| Parameter              | What it controls                                      | Default |
+|------------------------|-------------------------------------------------------|---------|
+| `livelock_window`      | Number of recent messages scanned for repeated patterns | `50`  |
+| `livelock_min_repeats` | How many times a pattern must repeat to trigger         | `3`   |
+| `livelock_min_pattern` | Minimum messages per pattern (e.g., 2 = request/reply)  | `2`   |
+| `livelock_ring_size`   | Ring buffer capacity per agent pair                     | `200` |
+| `cycle_check_interval` | Seconds between periodic full-graph deadlock scans      | `5.0` |
+
+### Recommended starting values
+
+#### Linear pipelines (5-10 agents, sequential)
+
+Agents pass work forward in a chain with no intentional loops. Any repeated
+pattern is likely a genuine livelock.
+
+```python
+TangleConfig(
+    livelock_window=30,         # short chains produce fewer messages
+    livelock_min_repeats=3,     # 3 repeats is a strong signal with no loops
+    livelock_min_pattern=2,     # request/response pairs
+    livelock_ring_size=100,     # smaller buffer is sufficient
+    cycle_check_interval=5.0,   # default is fine — cycles are rare here
+)
+```
+
+**Why these values:** Linear pipelines have low message volume per agent pair.
+A window of 30 captures the full recent conversation without noise from
+unrelated earlier stages. The ring buffer can be halved since each pair only
+exchanges a bounded number of messages.
+
+#### Fan-out/fan-in (1 coordinator, N workers)
+
+One coordinator dispatches to N workers and aggregates results. Workers don't
+talk to each other, so livelocks appear as coordinator-worker ping-pong.
+
+```python
+TangleConfig(
+    livelock_window=50,         # default — coordinator sees many messages
+    livelock_min_repeats=4,     # raise threshold: retries are expected
+    livelock_min_pattern=2,     # coordinator/worker exchange pairs
+    livelock_ring_size=200,     # default — many concurrent pairs
+    cycle_check_interval=10.0,  # relax — fan-out rarely deadlocks
+)
+```
+
+**Why these values:** The coordinator legitimately retries failed workers, so
+raising `min_repeats` to 4 avoids false positives from normal retry logic.
+The wider scan interval reflects that fan-out topologies rarely form cycles
+(workers don't depend on each other).
+
+#### Debate/review loops (2-3 agents, intentional cycling)
+
+Agents are designed to loop — a drafter and reviewer exchange revisions until
+quality is met. You want to catch *excessive* looping, not normal iteration.
+
+```python
+TangleConfig(
+    livelock_window=80,         # wider window to see through intentional loops
+    livelock_min_repeats=5,     # high threshold: 5+ identical rounds = stuck
+    livelock_min_pattern=3,     # draft/review/feedback triples
+    livelock_ring_size=300,     # larger buffer for chatty exchanges
+    cycle_check_interval=5.0,   # keep default — cycles are the main risk
+)
+```
+
+**Why these values:** With intentional cycling, the detector needs to
+distinguish productive iteration (different content each round) from true
+livelock (identical content repeating). A `min_repeats` of 5 means the exact
+same message pattern must appear five times — well beyond normal review
+rounds. Setting `min_pattern=3` matches the full draft/review/feedback
+triple, reducing false matches on shorter subsequences.
+
+#### Long-running research (hours, sparse events)
+
+Agents run for hours with long gaps between messages (e.g., web research,
+document analysis). Events are sparse but a stuck agent can waste significant
+compute.
+
+```python
+TangleConfig(
+    livelock_window=20,         # fewer messages in flight at any time
+    livelock_min_repeats=2,     # 2 repeats is significant with sparse events
+    livelock_min_pattern=2,     # request/response pairs
+    livelock_ring_size=50,      # small buffer — low message throughput
+    cycle_check_interval=30.0,  # slower scans: agents are idle most of the time
+)
+```
+
+**Why these values:** With sparse events, even 2 identical exchanges strongly
+suggest a livelock — agents don't accidentally produce the same research
+query twice. The narrow window and small ring buffer match the low message
+volume. The relaxed scan interval avoids unnecessary CPU work during long
+idle periods.
+
+### General tuning tips
+
+- **Start with defaults and tighten.** Run your workflow with the defaults,
+  review the detections, then adjust. Over-tuning before observing real
+  traffic leads to blind spots.
+- **`livelock_min_repeats` is your main dial.** Lower it for faster
+  detection, raise it to tolerate intentional retries.
+- **`livelock_window` must be >= `min_repeats * min_pattern`.** If the window
+  is too small to contain the full repeated pattern, detection cannot trigger.
+  Tangle does not enforce this at config time, so verify it yourself.
+- **`livelock_ring_size` >= `livelock_window`.** The ring buffer must hold at
+  least as many messages as the analysis window. If it's smaller, older
+  messages are evicted before they can be analyzed.
+- **Use `PROGRESS` events to reset detection.** If your agents emit
+  `PROGRESS` events when making genuine forward progress, the livelock
+  detector resets its buffers for that pair. This lets you keep aggressive
+  detection thresholds without false positives.
+
 ## Development
 
 ### Setup
