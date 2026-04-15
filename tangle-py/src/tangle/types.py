@@ -64,6 +64,14 @@ class ResolutionAction(enum.Enum):
     ESCALATE = "escalate"
 
 
+class ResolutionFailurePolicy(enum.Enum):
+    IGNORE = "ignore"
+    RAISE = "raise"
+    MARK_UNRESOLVED = "mark_unresolved"
+    RETRY_WEBHOOK = "retry_webhook"
+    RETRY_CHAIN = "retry_chain"
+
+
 @dataclass(slots=True)
 class Cycle:
     id: str = field(default_factory=lambda: str(uuid4()))
@@ -93,3 +101,4 @@ class Detection:
     severity: Severity
     cycle: Cycle | None = None
     livelock: LivelockPattern | None = None
+    resolution_exhausted: bool = False

@@ -11,6 +11,7 @@ from tangle.graph.wfg import WaitForGraph
 from tangle.resolver.alert import AlertResolver
 from tangle.resolver.cancel import CancelResolver
 from tangle.resolver.chain import ResolverChain
+from tangle.resolver.errors import ResolutionExhaustedError
 from tangle.resolver.escalate import EscalateResolver
 from tangle.resolver.tiebreaker import TiebreakerResolver
 from tangle.types import (
@@ -19,6 +20,7 @@ from tangle.types import (
     DetectionType,
     LivelockPattern,
     ResolutionAction,
+    ResolutionFailurePolicy,
     Severity,
 )
 
@@ -345,8 +347,8 @@ class TestResolverChain:
         assert first.count == 1  # detection appended before resolver raised
         assert second.count == 1
 
-    def test_chain_resolver_all_fail(self) -> None:
-        """When all resolvers fail, the last error is raised."""
+    def test_chain_resolver_all_fail_ignore_policy(self) -> None:
+        """Default IGNORE policy: when all resolvers fail, no exception is raised."""
         first = MockResolver()
         first.should_fail = True
         second = MockResolver()
@@ -354,8 +356,26 @@ class TestResolverChain:
         chain = ResolverChain(resolvers=[first, second])
         detection = _deadlock_detection()
 
-        with pytest.raises(RuntimeError, match="MockResolver forced failure"):
+        # Should not raise with default IGNORE policy
+        chain.resolve(detection)
+
+    def test_chain_resolver_all_fail_raise_policy(self) -> None:
+        """RAISE policy: when all resolvers fail, ResolutionExhaustedError is raised."""
+        first = MockResolver()
+        first.should_fail = True
+        second = MockResolver()
+        second.should_fail = True
+        chain = ResolverChain(
+            resolvers=[first, second],
+            failure_policy=ResolutionFailurePolicy.RAISE,
+        )
+        detection = _deadlock_detection()
+
+        with pytest.raises(ResolutionExhaustedError) as exc_info:
             chain.resolve(detection)
+
+        assert exc_info.value.attempts == 1
+        assert isinstance(exc_info.value.last_error, RuntimeError)
 
     def test_chain_resolver_empty(self) -> None:
         """An empty chain does not raise."""
@@ -395,15 +415,15 @@ class TestResolverChain:
         assert second.count == 1
         assert third.count == 0
 
-    def test_chain_single_resolver_failure(self) -> None:
-        """Single failing resolver raises its error."""
+    def test_chain_single_resolver_failure_ignore(self) -> None:
+        """Single failing resolver with IGNORE policy does not raise."""
         only = MockResolver()
         only.should_fail = True
         chain = ResolverChain(resolvers=[only])
         detection = _deadlock_detection()
 
-        with pytest.raises(RuntimeError, match="MockResolver forced failure"):
-            chain.resolve(detection)
+        # Should not raise with default IGNORE policy
+        chain.resolve(detection)
 
 
 # ===========================================================================
@@ -528,3 +548,223 @@ class TestEscalateResolverEdgeCases:
             pytest.raises(httpx.ConnectError),
         ):
             resolver.resolve(detection)
+
+
+# ===========================================================================
+# Resolution failure policies
+# ===========================================================================
+
+
+class _MockEscalateResolver:
+    """A fake escalation resolver for testing retry_webhook policy."""
+
+    def __init__(self) -> None:
+        self.call_count = 0
+        self.succeed_on: int | None = None  # succeed on Nth call (1-based)
+
+    @property
+    def name(self) -> str:
+        return "escalate"
+
+    @property
+    def is_notification(self) -> bool:
+        return False
+
+    def resolve(self, detection: Detection) -> None:
+        self.call_count += 1
+        if self.succeed_on is not None and self.call_count >= self.succeed_on:
+            return
+        raise RuntimeError("webhook failed")
+
+
+class TestResolutionFailurePolicy:
+    def test_ignore_policy_swallows_error(self) -> None:
+        """IGNORE policy logs the failure and returns without raising."""
+        r = MockResolver()
+        r.should_fail = True
+        chain = ResolverChain(
+            resolvers=[r],
+            failure_policy=ResolutionFailurePolicy.IGNORE,
+        )
+        detection = _deadlock_detection()
+
+        chain.resolve(detection)  # should not raise
+        assert not detection.resolution_exhausted
+
+    def test_raise_policy_raises_exhausted_error(self) -> None:
+        """RAISE policy raises ResolutionExhaustedError with metadata."""
+        r = MockResolver()
+        r.should_fail = True
+        chain = ResolverChain(
+            resolvers=[r],
+            failure_policy=ResolutionFailurePolicy.RAISE,
+        )
+        detection = _deadlock_detection()
+
+        with pytest.raises(ResolutionExhaustedError) as exc_info:
+            chain.resolve(detection)
+
+        err = exc_info.value
+        assert err.detection is detection
+        assert err.attempts == 1
+        assert isinstance(err.last_error, RuntimeError)
+        assert "exhausted" in str(err).lower()
+
+    def test_mark_unresolved_sets_flag(self) -> None:
+        """MARK_UNRESOLVED policy sets detection.resolution_exhausted = True."""
+        r = MockResolver()
+        r.should_fail = True
+        chain = ResolverChain(
+            resolvers=[r],
+            failure_policy=ResolutionFailurePolicy.MARK_UNRESOLVED,
+        )
+        detection = _deadlock_detection()
+
+        chain.resolve(detection)  # should not raise
+
+        assert detection.resolution_exhausted is True
+
+    def test_retry_webhook_succeeds_on_second_attempt(self) -> None:
+        """RETRY_WEBHOOK retries only escalation resolvers with backoff."""
+        escalate = _MockEscalateResolver()
+        escalate.succeed_on = 2  # fail first, succeed second
+        delays: list[float] = []
+
+        chain = ResolverChain(
+            resolvers=[escalate],
+            failure_policy=ResolutionFailurePolicy.RETRY_WEBHOOK,
+            max_attempts=3,
+            retry_base_delay=0.5,
+            clock=lambda d: delays.append(d),
+        )
+        detection = _deadlock_detection()
+
+        chain.resolve(detection)
+
+        assert escalate.call_count == 2
+        assert len(delays) == 1
+        assert delays[0] == 0.5  # base_delay * 2^0
+
+    def test_retry_webhook_exhausted(self) -> None:
+        """RETRY_WEBHOOK raises ResolutionExhaustedError after max attempts."""
+        escalate = _MockEscalateResolver()  # always fails
+
+        chain = ResolverChain(
+            resolvers=[escalate],
+            failure_policy=ResolutionFailurePolicy.RETRY_WEBHOOK,
+            max_attempts=3,
+            retry_base_delay=0.01,
+            clock=lambda _: None,  # no-op sleep for speed
+        )
+        detection = _deadlock_detection()
+
+        with pytest.raises(ResolutionExhaustedError) as exc_info:
+            chain.resolve(detection)
+
+        assert exc_info.value.attempts == 3
+        assert detection.resolution_exhausted is True
+        assert escalate.call_count == 3  # 1 initial + 2 retries
+
+    def test_retry_chain_succeeds_on_third_attempt(self) -> None:
+        """RETRY_CHAIN retries the entire remediation phase."""
+        r = MockResolver()
+        r.should_fail = True  # always fails
+
+        second = _MockEscalateResolver()
+        second.succeed_on = 3  # succeed on third call
+
+        delays: list[float] = []
+
+        chain = ResolverChain(
+            resolvers=[r, second],
+            failure_policy=ResolutionFailurePolicy.RETRY_CHAIN,
+            max_attempts=3,
+            retry_base_delay=0.1,
+            clock=lambda d: delays.append(d),
+        )
+        detection = _deadlock_detection()
+
+        chain.resolve(detection)
+
+        # first attempt: r fails, second fails (call 1)
+        # retry 1: r fails, second fails (call 2)
+        # retry 2: r fails, second succeeds (call 3)
+        assert second.call_count == 3
+        assert len(delays) == 2
+        assert delays[0] == pytest.approx(0.1)  # 0.1 * 2^0
+        assert delays[1] == pytest.approx(0.2)  # 0.1 * 2^1
+
+    def test_retry_chain_exhausted(self) -> None:
+        """RETRY_CHAIN raises after all attempts fail."""
+        r = MockResolver()
+        r.should_fail = True
+
+        chain = ResolverChain(
+            resolvers=[r],
+            failure_policy=ResolutionFailurePolicy.RETRY_CHAIN,
+            max_attempts=2,
+            retry_base_delay=0.01,
+            clock=lambda _: None,
+        )
+        detection = _deadlock_detection()
+
+        with pytest.raises(ResolutionExhaustedError) as exc_info:
+            chain.resolve(detection)
+
+        assert exc_info.value.attempts == 2
+        assert detection.resolution_exhausted is True
+
+    def test_retry_backoff_is_exponential(self) -> None:
+        """Verify delays follow exponential backoff: base * 2^(attempt-2)."""
+        escalate = _MockEscalateResolver()  # always fails
+        delays: list[float] = []
+
+        chain = ResolverChain(
+            resolvers=[escalate],
+            failure_policy=ResolutionFailurePolicy.RETRY_WEBHOOK,
+            max_attempts=4,
+            retry_base_delay=1.0,
+            clock=lambda d: delays.append(d),
+        )
+        detection = _deadlock_detection()
+
+        with pytest.raises(ResolutionExhaustedError):
+            chain.resolve(detection)
+
+        assert delays == [1.0, 2.0, 4.0]  # 1*2^0, 1*2^1, 1*2^2
+
+    def test_no_remediation_resolvers_no_failure(self) -> None:
+        """With only notification resolvers, no failure policy is triggered."""
+        alert = AlertResolver()
+        chain = ResolverChain(
+            resolvers=[alert],
+            failure_policy=ResolutionFailurePolicy.RAISE,
+        )
+        detection = _deadlock_detection()
+
+        # Notification-only chain should not trigger failure policy
+        chain.resolve(detection)
+
+    def test_retry_webhook_skips_non_escalate_resolvers(self) -> None:
+        """RETRY_WEBHOOK only retries resolvers named 'escalate'."""
+        regular = MockResolver()
+        regular.should_fail = True
+
+        escalate = _MockEscalateResolver()
+        escalate.succeed_on = 2
+
+        chain = ResolverChain(
+            resolvers=[regular, escalate],
+            failure_policy=ResolutionFailurePolicy.RETRY_WEBHOOK,
+            max_attempts=3,
+            retry_base_delay=0.01,
+            clock=lambda _: None,
+        )
+        detection = _deadlock_detection()
+
+        chain.resolve(detection)
+
+        # regular resolver called once in initial pass, not during retry
+        assert regular.count == 1
+        # escalate called once in initial pass + once in retry
+        assert escalate.call_count == 2

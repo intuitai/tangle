@@ -2,7 +2,7 @@
 
 from pydantic import BaseModel, Field
 
-from tangle.types import ResolutionAction
+from tangle.types import ResolutionAction, ResolutionFailurePolicy
 
 
 class TangleConfig(BaseModel):
@@ -28,6 +28,26 @@ class TangleConfig(BaseModel):
         default=200, ge=10, description="Ring buffer capacity per agent pair"
     )
     resolution: ResolutionAction = Field(default=ResolutionAction.ALERT)
+    resolution_failure_policy: ResolutionFailurePolicy = Field(
+        default=ResolutionFailurePolicy.IGNORE,
+        description=(
+            "What to do when all resolvers fail: "
+            "ignore (log only), raise (propagate to caller), "
+            "mark_unresolved (flag the detection), "
+            "retry_webhook (retry escalation with backoff), "
+            "retry_chain (retry entire chain with backoff)"
+        ),
+    )
+    max_resolution_attempts: int = Field(
+        default=3,
+        ge=1,
+        description="Maximum retry attempts for retry_webhook/retry_chain failure policies",
+    )
+    resolution_retry_base_delay: float = Field(
+        default=1.0,
+        gt=0,
+        description="Base delay in seconds for exponential backoff on resolution retries",
+    )
     escalation_webhook_url: str = Field(default="")
     tiebreaker_prompt: str = Field(
         default=(

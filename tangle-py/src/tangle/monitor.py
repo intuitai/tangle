@@ -22,6 +22,7 @@ from tangle.logging import configure_logging, shutdown_logging
 from tangle.resolver.alert import AlertResolver
 from tangle.resolver.cancel import CancelResolver
 from tangle.resolver.chain import ResolverChain
+from tangle.resolver.errors import ResolutionExhaustedError
 from tangle.resolver.escalate import EscalateResolver
 from tangle.resolver.tiebreaker import TiebreakerResolver
 from tangle.store.memory import MemoryStore
@@ -81,7 +82,17 @@ class TangleMonitor:
             self._store = MemoryStore()
 
         # Build resolver chain
-        self._resolver_chain = ResolverChain()
+        from tangle.types import ResolutionFailurePolicy
+
+        raw_policy = self._config.resolution_failure_policy
+        failure_policy = (
+            ResolutionFailurePolicy(raw_policy) if isinstance(raw_policy, str) else raw_policy
+        )
+        self._resolver_chain = ResolverChain(
+            failure_policy=failure_policy,
+            max_attempts=self._config.max_resolution_attempts,
+            retry_base_delay=self._config.resolution_retry_base_delay,
+        )
         self._resolver_chain.add(AlertResolver(on_detection=on_detection))
 
         resolution = self._config.resolution
@@ -303,6 +314,8 @@ class TangleMonitor:
                     self._metrics.record_detection(detection)
                 try:
                     self._resolver_chain.resolve(detection)
+                except ResolutionExhaustedError:
+                    raise
                 except Exception:
                     logger.exception("resolver_chain_failed")
 
@@ -389,6 +402,8 @@ class TangleMonitor:
                             self._metrics.record_detection(detection)
                         try:
                             self._resolver_chain.resolve(detection)
+                        except ResolutionExhaustedError:
+                            logger.exception("periodic_resolution_exhausted")
                         except Exception:
                             logger.exception("periodic_resolver_failed")
 
