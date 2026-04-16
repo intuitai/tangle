@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Replayability toolkit** (`tangle.replay`):
+  - `EventLogWriter` / `EventLogReader` — append-only JSONL event log with
+    per-line sha256 integrity hashes and sequence numbers. Enabled via
+    `TangleConfig.event_log_path`. Partial tails from crashes can be recovered
+    with `strict=False`.
+  - `replay_events()` — deterministic local replay that drives a fresh monitor
+    with an `ExplicitClock` so recorded timestamps reproduce the original run.
+    Background scans are disabled during replay.
+  - `diff_detections()` / `DetectionDiff` — compare original vs. replayed
+    detections by stable fingerprint (type + workflow + sorted agents);
+    reports missing, added, changed, and unchanged counts.
+  - `pack_bundle()` / `unpack_bundle()` — gzipped tar support bundle format
+    with `manifest.json` (tangle version, config, platform), the verbatim
+    event log, and recorded detections.
+  - CLI subcommands: `tangle replay <log-or-bundle>`, `tangle bundle <output>`,
+    `tangle diff <bundle>`. The diff command exits with code `2` when it
+    detects a regression so CI can gate on it.
+
 ## [0.1.0] - 2025-05-01
 
 Initial release.

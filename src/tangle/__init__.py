@@ -11,6 +11,17 @@ from tangle.monitor import TangleMonitor
 
 with contextlib.suppress(ImportError):
     from tangle.metrics import TangleMetrics
+from tangle.replay import (
+    BundleManifest,
+    DetectionDiff,
+    EventLogReader,
+    EventLogWriter,
+    ReplayResult,
+    diff_detections,
+    pack_bundle,
+    replay_events,
+    unpack_bundle,
+)
 from tangle.types import (
     AgentID,
     AgentStatus,
@@ -44,4 +55,13 @@ __all__ = [
     "LivelockPattern",
     "ResolutionAction",
     "Severity",
+    "BundleManifest",
+    "DetectionDiff",
+    "EventLogReader",
+    "EventLogWriter",
+    "ReplayResult",
+    "diff_detections",
+    "pack_bundle",
+    "replay_events",
+    "unpack_bundle",
 ]

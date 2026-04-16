@@ -13,6 +13,7 @@ if TYPE_CHECKING:
 
     from tangle.integrations.otel import OTelCollector
     from tangle.metrics import TangleMetrics
+    from tangle.replay.log import EventLogWriter
 
 from tangle.config import TangleConfig
 from tangle.detector.cycle import CycleDetector
@@ -82,6 +83,16 @@ class TangleMonitor:
             self._store = SQLiteStore(self._config.sqlite_path)
         else:
             self._store = MemoryStore()
+
+        # Append-only event log (optional).
+        self._event_log: EventLogWriter | None = None
+        if self._config.event_log_path:
+            from tangle.replay.log import EventLogWriter as _ELW
+
+            self._event_log = _ELW(
+                self._config.event_log_path,
+                fsync=self._config.event_log_fsync,
+            )
 
         # Build resolver chain
         from tangle.types import ResolutionFailurePolicy
@@ -235,6 +246,8 @@ class TangleMonitor:
         with self._lock:
             self._events_processed += 1
             self._store.record_event(event)
+            if self._event_log is not None:
+                self._event_log.append(event)
             if self._metrics:
                 self._metrics.record_event(event.type.value)
 
@@ -416,6 +429,8 @@ class TangleMonitor:
         if self._scan_thread and self._scan_thread.is_alive():
             self._scan_thread.join(timeout=5)
         self._store.close()
+        if self._event_log is not None:
+            self._event_log.close()
         shutdown_logging()
 
     def reset_workflow(self, workflow_id: str) -> None:

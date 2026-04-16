@@ -59,6 +59,21 @@ class TangleConfig(BaseModel):
     store_backend: str = Field(default="memory", pattern="^(memory|sqlite)$")
     sqlite_path: str = Field(default="tangle.db")
 
+    event_log_path: str = Field(
+        default="",
+        description=(
+            "Path to an append-only JSONL event log. Empty disables logging. "
+            "When set, every processed event is written for deterministic replay."
+        ),
+    )
+    event_log_fsync: bool = Field(
+        default=True,
+        description=(
+            "Call fsync after each event log append. Safer but slower; disable "
+            "on hot paths where the log is replicated elsewhere."
+        ),
+    )
+
     otel_enabled: bool = Field(
         default=False, description="Enable OTLP gRPC span receiver and log export"
     )
