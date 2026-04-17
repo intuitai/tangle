@@ -16,6 +16,8 @@ from tangle.monitor import TangleMonitor
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
+    from tangle.types import Detection
+
 _REPLAY_SUBCOMMANDS = {"replay", "bundle", "diff"}
 
 
@@ -71,7 +73,6 @@ def _cmd_replay(args: argparse.Namespace) -> int:
 def _cmd_bundle(args: argparse.Namespace) -> int:
     from tangle.replay import pack_bundle
     from tangle.replay.log import decode_detection
-    from tangle.types import Detection
 
     detections: list[Detection] = []
     if args.detections:
