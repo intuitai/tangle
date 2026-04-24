@@ -70,9 +70,9 @@ class TestServerE2E:
             # Query detections
             resp = await client.get("/v1/detections")
             assert resp.status_code == 200
-            detections = resp.json()
-            assert len(detections) >= 1
-            assert detections[0]["type"] == "deadlock"
+            body = resp.json()
+            assert body["total"] >= 1
+            assert body["items"][0]["type"] == "deadlock"
 
             # Query stats
             resp = await client.get("/v1/stats")

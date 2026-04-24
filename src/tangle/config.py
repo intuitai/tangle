@@ -94,3 +94,19 @@ class TangleConfig(BaseModel):
 
     server_host: str = Field(default="0.0.0.0")
     server_port: int = Field(default=8090)
+
+    api_auth_token: str = Field(
+        default="",
+        description=(
+            "Bearer token required on all /v1 routes. Empty disables auth "
+            "(intended only for local/dev sidecars behind a trusted network)."
+        ),
+    )
+    api_idempotency_cache_size: int = Field(
+        default=1024,
+        ge=0,
+        description=(
+            "Number of recent Idempotency-Key values to remember for event ingestion. "
+            "0 disables idempotency caching; duplicate keys then re-process normally."
+        ),
+    )

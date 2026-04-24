@@ -138,7 +138,7 @@ class TestGetGraph:
 
 class TestGetDetections:
     async def test_get_detections(self, client: httpx.AsyncClient, monitor: TangleMonitor) -> None:
-        """GET /v1/detections returns active detections as a list."""
+        """GET /v1/detections returns a paginated envelope of detections."""
         # Create a deadlock
         monitor.register("wf-det", "A")
         monitor.register("wf-det", "B")
@@ -149,12 +149,18 @@ class TestGetDetections:
 
         assert resp.status_code == 200
         body = resp.json()
-        assert isinstance(body, list)
-        assert len(body) >= 1
-        assert body[0]["type"] == "deadlock"
-        assert body[0]["severity"] == "critical"
-        assert body[0]["cycle"] is not None
-        assert set(body[0]["cycle"]["agents"]) >= {"A", "B"}
+        assert isinstance(body, dict)
+        assert body["total"] >= 1
+        assert body["limit"] == 100
+        assert body["offset"] == 0
+        items = body["items"]
+        assert len(items) >= 1
+        assert items[0]["type"] == "deadlock"
+        assert items[0]["severity"] == "critical"
+        assert items[0]["resolved"] is False
+        assert items[0]["workflow_id"] == "wf-det"
+        assert items[0]["cycle"] is not None
+        assert set(items[0]["cycle"]["agents"]) >= {"A", "B"}
 
 
 # ---------------------------------------------------------------------------
@@ -293,7 +299,7 @@ class TestGetDetectionsLivelock:
         resp = await client.get("/v1/detections")
         assert resp.status_code == 200
         body = resp.json()
-        livelock_dets = [d for d in body if d.get("livelock") is not None]
+        livelock_dets = [d for d in body["items"] if d.get("livelock") is not None]
         if livelock_dets:
             ll = livelock_dets[0]["livelock"]
             assert "agents" in ll
@@ -314,3 +320,195 @@ class TestGetGraphRegisteredOnly:
         assert body["nodes"] == ["Solo"]
         assert body["edges"] == []
         assert body["states"]["Solo"] == "active"
+
+
+# ---------------------------------------------------------------------------
+# Auth
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture()
+def auth_monitor(fake_clock: FakeClock) -> TangleMonitor:
+    config = TangleConfig(
+        cycle_check_interval=999_999.0,
+        api_auth_token="s3cret",
+    )
+    return TangleMonitor(config=config, clock=fake_clock)
+
+
+@pytest.fixture()
+async def auth_client(auth_monitor: TangleMonitor) -> httpx.AsyncClient:
+    app = create_app(auth_monitor)
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app),
+        base_url="http://test",
+    ) as ac:
+        yield ac
+
+
+class TestAuth:
+    async def test_missing_token_rejected(self, auth_client: httpx.AsyncClient) -> None:
+        resp = await auth_client.get("/v1/stats")
+        assert resp.status_code == 401
+        assert resp.headers.get("www-authenticate", "").lower().startswith("bearer")
+
+    async def test_wrong_token_rejected(self, auth_client: httpx.AsyncClient) -> None:
+        resp = await auth_client.get("/v1/stats", headers={"Authorization": "Bearer wrong"})
+        assert resp.status_code == 401
+
+    async def test_non_bearer_scheme_rejected(self, auth_client: httpx.AsyncClient) -> None:
+        resp = await auth_client.get("/v1/stats", headers={"Authorization": "Basic dXNlcjpwYXNz"})
+        assert resp.status_code == 401
+
+    async def test_valid_token_accepted(self, auth_client: httpx.AsyncClient) -> None:
+        resp = await auth_client.get("/v1/stats", headers={"Authorization": "Bearer s3cret"})
+        assert resp.status_code == 200
+
+    async def test_healthz_always_public(self, auth_client: httpx.AsyncClient) -> None:
+        """Liveness probe must not require auth."""
+        resp = await auth_client.get("/healthz")
+        assert resp.status_code == 200
+
+
+# ---------------------------------------------------------------------------
+# Detection filters & pagination
+# ---------------------------------------------------------------------------
+
+
+class TestDetectionFilters:
+    async def test_filter_by_workflow_id(
+        self, client: httpx.AsyncClient, monitor: TangleMonitor
+    ) -> None:
+        monitor.register("wf-a", "A")
+        monitor.register("wf-a", "B")
+        monitor.wait_for("wf-a", "A", "B")
+        monitor.wait_for("wf-a", "B", "A")
+
+        monitor.register("wf-b", "X")
+        monitor.register("wf-b", "Y")
+        monitor.wait_for("wf-b", "X", "Y")
+        monitor.wait_for("wf-b", "Y", "X")
+
+        resp = await client.get("/v1/detections", params={"workflow_id": "wf-a"})
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["total"] >= 1
+        assert all(item["workflow_id"] == "wf-a" for item in body["items"])
+
+    async def test_filter_by_type(self, client: httpx.AsyncClient, monitor: TangleMonitor) -> None:
+        monitor.register("wf-t", "A")
+        monitor.register("wf-t", "B")
+        monitor.wait_for("wf-t", "A", "B")
+        monitor.wait_for("wf-t", "B", "A")
+
+        resp = await client.get("/v1/detections", params={"type": "livelock"})
+        assert resp.status_code == 200
+        assert resp.json()["total"] == 0
+
+        resp = await client.get("/v1/detections", params={"type": "deadlock"})
+        assert resp.json()["total"] >= 1
+
+    async def test_invalid_type_rejected(self, client: httpx.AsyncClient) -> None:
+        resp = await client.get("/v1/detections", params={"type": "nonsense"})
+        assert resp.status_code == 422
+
+    async def test_limit_and_offset(
+        self, client: httpx.AsyncClient, monitor: TangleMonitor
+    ) -> None:
+        # Create multiple deadlocks across different workflows.
+        for i in range(5):
+            wf = f"wf-{i}"
+            monitor.register(wf, "A")
+            monitor.register(wf, "B")
+            monitor.wait_for(wf, "A", "B")
+            monitor.wait_for(wf, "B", "A")
+
+        resp = await client.get("/v1/detections", params={"limit": 2, "offset": 0})
+        body = resp.json()
+        assert len(body["items"]) == 2
+        assert body["total"] >= 5
+        assert body["limit"] == 2
+
+        resp2 = await client.get("/v1/detections", params={"limit": 2, "offset": 2})
+        body2 = resp2.json()
+        assert len(body2["items"]) == 2
+        assert body2["offset"] == 2
+
+    async def test_resolved_filter_default_excludes_resolved(
+        self, client: httpx.AsyncClient, monitor: TangleMonitor
+    ) -> None:
+        monitor.register("wf-r", "A")
+        monitor.register("wf-r", "B")
+        monitor.wait_for("wf-r", "A", "B")
+        monitor.wait_for("wf-r", "B", "A")
+
+        # Mark the detection resolved.
+        with monitor._lock:
+            assert monitor._detections[0].cycle is not None
+            monitor._detections[0].cycle.resolved = True
+
+        resp_default = await client.get("/v1/detections")
+        assert resp_default.json()["total"] == 0
+
+        resp_all = await client.get("/v1/detections", params={"resolved": "true"})
+        assert resp_all.json()["total"] >= 1
+
+
+# ---------------------------------------------------------------------------
+# Idempotency
+# ---------------------------------------------------------------------------
+
+
+class TestIdempotency:
+    async def test_same_key_same_body_returns_cached(
+        self, client: httpx.AsyncClient, monitor: TangleMonitor
+    ) -> None:
+        payload = {"type": "register", "workflow_id": "wf-idem", "from_agent": "A"}
+        headers = {"Idempotency-Key": "abc-123"}
+
+        first = await client.post("/v1/events", json=payload, headers=headers)
+        assert first.status_code == 202
+        assert first.json()["idempotent_replay"] is False
+
+        second = await client.post("/v1/events", json=payload, headers=headers)
+        assert second.status_code == 202
+        assert second.json()["idempotent_replay"] is True
+
+        # Exactly one event should have been processed by the monitor.
+        events = monitor._store.get_workflow_events("wf-idem")
+        assert len(events) == 1
+
+    async def test_same_key_different_body_does_not_collide(
+        self, client: httpx.AsyncClient, monitor: TangleMonitor
+    ) -> None:
+        headers = {"Idempotency-Key": "same-key"}
+        p1 = {"type": "register", "workflow_id": "wf-x", "from_agent": "A"}
+        p2 = {"type": "register", "workflow_id": "wf-x", "from_agent": "B"}
+
+        r1 = await client.post("/v1/events", json=p1, headers=headers)
+        r2 = await client.post("/v1/events", json=p2, headers=headers)
+        assert r1.json()["idempotent_replay"] is False
+        assert r2.json()["idempotent_replay"] is False
+        assert len(monitor._store.get_workflow_events("wf-x")) == 2
+
+    async def test_batch_idempotency(self, client: httpx.AsyncClient) -> None:
+        payload = {
+            "events": [
+                {"type": "register", "workflow_id": "wf-bi", "from_agent": "A"},
+                {"type": "register", "workflow_id": "wf-bi", "from_agent": "B"},
+            ],
+        }
+        headers = {"Idempotency-Key": "batch-key"}
+        first = await client.post("/v1/events/batch", json=payload, headers=headers)
+        second = await client.post("/v1/events/batch", json=payload, headers=headers)
+        assert first.json()["idempotent_replay"] is False
+        assert second.json()["idempotent_replay"] is True
+        assert second.json()["events_count"] == 2
+
+    async def test_no_key_always_processes(
+        self, client: httpx.AsyncClient, monitor: TangleMonitor
+    ) -> None:
+        payload = {"type": "register", "workflow_id": "wf-nk", "from_agent": "A"}
+        await client.post("/v1/events", json=payload)
+        await client.post("/v1/events", json=payload)
+        assert len(monitor._store.get_workflow_events("wf-nk")) == 2

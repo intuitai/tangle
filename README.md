@@ -240,16 +240,35 @@ def route(state):
 tangle --host 0.0.0.0 --port 8090
 ```
 
-Endpoints (all under `/v1`):
+Endpoints (all under `/v1`, versioned):
 
-| Method | Path                    | Description              |
-|--------|-------------------------|--------------------------|
-| POST   | `/v1/events`            | Submit a single event    |
-| POST   | `/v1/events/batch`      | Submit events in batch   |
-| GET    | `/v1/graph/{workflow}`  | Get workflow graph state |
-| GET    | `/v1/detections`        | List active detections   |
-| GET    | `/v1/stats`             | Monitor statistics       |
-| GET    | `/healthz`              | Health check             |
+| Method | Path                    | Description                      |
+|--------|-------------------------|----------------------------------|
+| POST   | `/v1/events`            | Submit a single event            |
+| POST   | `/v1/events/batch`      | Submit events in batch           |
+| GET    | `/v1/graph/{workflow}`  | Get workflow graph state         |
+| GET    | `/v1/detections`        | List detections (paginated)      |
+| GET    | `/v1/stats`             | Monitor statistics               |
+| GET    | `/v1/metrics`           | Prometheus metrics (if enabled)  |
+| GET    | `/healthz`              | Liveness probe (unversioned)     |
+
+The full client contract — authentication, idempotency, filtering,
+versioning policy, and request/response schemas — lives in
+[`API.md`](./API.md). The live OpenAPI schema is served at `/openapi.json`
+and interactive docs at `/docs`.
+
+**Authentication.** Set `TangleConfig.api_auth_token` to require
+`Authorization: Bearer <token>` on all `/v1` routes. Leaving it empty
+disables auth for local/dev sidecars.
+
+**Idempotency.** `POST /v1/events` and `/v1/events/batch` accept an
+`Idempotency-Key` header. Retries with the same key and body return the
+original response without re-processing. Without a key, ingestion is
+at-least-once — prefer keys in production.
+
+**Filtering.** `GET /v1/detections` supports `workflow_id`, `type`,
+`severity`, `resolved`, `limit`, and `offset` query parameters, and
+returns a paginated envelope: `{items, total, limit, offset}`.
 
 ## Examples
 
