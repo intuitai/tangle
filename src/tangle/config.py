@@ -87,9 +87,13 @@ class TangleConfig(BaseModel):
         description="OTel service.name resource attribute",
     )
 
-    metrics_enabled: bool = Field(default=False, description="Enable Prometheus metrics collection")
-    metrics_port: int = Field(
-        default=9090, description="Port for standalone Prometheus metrics HTTP server"
+    metrics_enabled: bool = Field(
+        default=False,
+        description=(
+            "Enable Prometheus metrics collection. When true, the FastAPI sidecar "
+            "exposes them at GET /v1/metrics; embedded callers can read "
+            "TangleMonitor.metrics directly."
+        ),
     )
 
     server_host: str = Field(default="0.0.0.0")
@@ -108,5 +112,43 @@ class TangleConfig(BaseModel):
         description=(
             "Number of recent Idempotency-Key values to remember for event ingestion. "
             "0 disables idempotency caching; duplicate keys then re-process normally."
+        ),
+    )
+
+    retention_completed_workflow_ttl: float = Field(
+        default=0.0,
+        ge=0,
+        description=(
+            "Seconds to keep a workflow whose agents are all COMPLETED/CANCELED. "
+            "0 disables age-based eviction (keeps every workflow until reset_workflow). "
+            "Eviction clears graph state, livelock buffers, and resolved detections."
+        ),
+    )
+    max_active_workflows: int = Field(
+        default=0,
+        ge=0,
+        description=(
+            "Soft cap on concurrently tracked workflows. When exceeded, terminal "
+            "workflows are evicted first (ignoring TTL). If no terminal workflow "
+            "exists to evict, the overflow is recorded in metrics and logged but "
+            "no in-flight workflow is forcibly removed. 0 disables the cap."
+        ),
+    )
+    max_events_in_memory: int = Field(
+        default=0,
+        ge=0,
+        description=(
+            "Maximum events retained by MemoryStore. When exceeded, oldest events "
+            "are dropped (ring-buffer semantics) and counted as evictions. "
+            "0 disables the cap. Has no effect on SQLiteStore."
+        ),
+    )
+    retention_check_interval: float = Field(
+        default=30.0,
+        gt=0,
+        description=(
+            "Seconds between retention sweeps. Sweeps run on the background scan "
+            "thread alongside cycle detection; each sweep evicts expired workflows "
+            "and updates retention metrics."
         ),
     )

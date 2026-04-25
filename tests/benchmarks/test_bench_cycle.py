@@ -5,6 +5,7 @@ from tangle.detector.cycle import CycleDetector
 from tangle.detector.livelock import LivelockDetector, RingBuffer
 from tangle.graph.wfg import WaitForGraph
 from tangle.monitor import TangleMonitor
+from tangle.replay import replay_events
 from tangle.types import Edge, Event, EventType
 
 
@@ -97,6 +98,13 @@ def test_bench_livelock_window_50(benchmark):
     benchmark(detector.on_message, "A", "B", b"repeated-msg", "wf")
 
 
+def test_bench_livelock_window_100(benchmark):
+    detector = LivelockDetector(window=100, min_repeats=3, min_pattern=2, ring_size=200)
+    for i in range(90):
+        detector.on_message("A", "B", f"msg-{i % 5}".encode(), "wf")
+    benchmark(detector.on_message, "A", "B", b"repeated-msg", "wf")
+
+
 def test_bench_livelock_window_200(benchmark):
     detector = LivelockDetector(window=200, min_repeats=3, min_pattern=2, ring_size=400)
     for i in range(180):
@@ -122,3 +130,54 @@ def test_bench_process_event(benchmark):
 def test_bench_ring_buffer_append(benchmark):
     buf = RingBuffer(capacity=200)
     benchmark(buf.append, b"0123456789abcdef")
+
+
+def _build_replay_events(n_workflows: int, sends_per_workflow: int) -> list[Event]:
+    """Build a realistic event mix: register pairs + repeated SENDs (no detections)."""
+    events: list[Event] = []
+    t = 0.0
+    for w in range(n_workflows):
+        wf = f"wf-{w}"
+        events.append(Event(type=EventType.REGISTER, timestamp=t, workflow_id=wf, from_agent="A"))
+        t += 0.001
+        events.append(Event(type=EventType.REGISTER, timestamp=t, workflow_id=wf, from_agent="B"))
+        t += 0.001
+        for i in range(sends_per_workflow):
+            events.append(
+                Event(
+                    type=EventType.SEND,
+                    timestamp=t,
+                    workflow_id=wf,
+                    from_agent="A",
+                    to_agent="B",
+                    message_body=f"payload-{i}".encode(),
+                )
+            )
+            t += 0.001
+    return events
+
+
+def test_bench_replay_1k_events(benchmark):
+    """End-to-end replay throughput on a 1000-event log (~50 workflows)."""
+    events = _build_replay_events(n_workflows=50, sends_per_workflow=18)
+    assert len(events) == 1000
+
+    def run() -> int:
+        result = replay_events(events)
+        return result.events_replayed
+
+    replayed = benchmark(run)
+    assert replayed == 1000
+
+
+def test_bench_replay_10k_events(benchmark):
+    """Replay throughput on a 10k-event log to confirm linear scaling."""
+    events = _build_replay_events(n_workflows=500, sends_per_workflow=18)
+    assert len(events) == 10_000
+
+    def run() -> int:
+        result = replay_events(events)
+        return result.events_replayed
+
+    replayed = benchmark(run)
+    assert replayed == 10_000

@@ -70,5 +70,5 @@ Initial release.
 - opentelemetry-api/sdk ≥1.29
 - pydantic ≥2.10
 
-[Unreleased]: https://github.com/intuitai/tangle/compare/v0.1.0...HEAD
-[0.1.0]: https://github.com/intuitai/tangle/releases/tag/v0.1.0
+[Unreleased]: https://github.com/nobelk/tangle/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/nobelk/tangle/releases/tag/v0.1.0

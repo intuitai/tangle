@@ -27,6 +27,7 @@ from tangle.resolver.chain import ResolverChain
 from tangle.resolver.errors import ResolutionExhaustedError
 from tangle.resolver.escalate import EscalateResolver
 from tangle.resolver.tiebreaker import TiebreakerResolver
+from tangle.retention import RetentionManager, detection_belongs_to
 from tangle.store.memory import MemoryStore
 from tangle.store.sqlite import SQLiteStore
 from tangle.types import (
@@ -88,7 +89,7 @@ class AsyncTangleMonitor:
         if self._config.store_backend == "sqlite":
             self._store = SQLiteStore(self._config.sqlite_path)
         else:
-            self._store = MemoryStore()
+            self._store = MemoryStore(max_events=self._config.max_events_in_memory)
 
         # Build resolver chain
         from tangle.types import ResolutionFailurePolicy
@@ -134,6 +135,16 @@ class AsyncTangleMonitor:
             from tangle.metrics import TangleMetrics as _TangleMetrics
 
             self._metrics = _TangleMetrics()
+
+        # Retention
+        self._retention = RetentionManager(
+            graph=self._graph,
+            livelock_detector=self._livelock_detector,
+            clock=self._clock,
+            completed_ttl=self._config.retention_completed_workflow_ttl,
+            max_active_workflows=self._config.max_active_workflows,
+        )
+        self._last_retention_sweep: float = self._clock()
 
         # Background scan
         self._scan_task: asyncio.Task[None] | None = None
@@ -241,6 +252,7 @@ class AsyncTangleMonitor:
         async with self._lock:
             self._events_processed += 1
             self._store.record_event(event)
+            self._retention.note_event(event)
             if self._metrics:
                 self._metrics.record_event(event.type.value)
 
@@ -385,6 +397,10 @@ class AsyncTangleMonitor:
                 break
             if self._stopped:
                 break
+            now = self._clock()
+            if now - self._last_retention_sweep >= self._config.retention_check_interval:
+                await self.sweep_retention()
+                self._last_retention_sweep = now
             async with self._lock:
                 cycles = self._cycle_detector.full_scan()
                 for cycle in cycles:
@@ -425,14 +441,39 @@ class AsyncTangleMonitor:
         async with self._lock:
             self._graph.clear_workflow(workflow_id)
             self._livelock_detector.clear_workflow(workflow_id)
+            self._retention.forget_workflow(workflow_id)
             self._detections = [
-                d
-                for d in self._detections
-                if not (
-                    (d.cycle and d.cycle.workflow_id == workflow_id)
-                    or (d.livelock and d.livelock.workflow_id == workflow_id)
-                )
+                d for d in self._detections if not detection_belongs_to(d, workflow_id)
             ]
+
+    async def sweep_retention(self) -> None:
+        """Run a retention sweep immediately."""
+        evicted: list[str] = []
+
+        async with self._lock:
+            result = self._retention.sweep(on_evict=evicted.append)
+            if evicted:
+                self._detections = [
+                    d
+                    for d in self._detections
+                    if not any(detection_belongs_to(d, wf) for wf in evicted)
+                ]
+            if isinstance(self._store, MemoryStore):
+                ev_evicted = self._store.drain_evicted()
+                ev_count = self._store.event_count()
+            else:
+                ev_evicted = 0
+                ev_count = 0
+
+        if self._metrics:
+            self._metrics.set_workflows_retained(result.retained_workflows)
+            self._metrics.record_workflow_evictions(
+                ttl=result.evicted_ttl,
+                capacity=result.evicted_capacity,
+            )
+            if isinstance(self._store, MemoryStore):
+                self._metrics.set_events_retained(ev_count)
+                self._metrics.record_event_evictions(ev_evicted)
 
     async def __aenter__(self) -> AsyncTangleMonitor:
         self.start_background()

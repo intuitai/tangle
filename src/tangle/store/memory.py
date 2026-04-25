@@ -1,15 +1,18 @@
 # src/tangle/store/memory.py
 
 import threading
+from collections import deque
 
 from tangle.types import Detection, DetectionType, Event
 
 
 class MemoryStore:
-    def __init__(self) -> None:
+    def __init__(self, max_events: int = 0) -> None:
         self._lock = threading.Lock()
         self._detections: list[Detection] = []
-        self._events: list[Event] = []
+        self._max_events = max_events
+        self._events: deque[Event] = deque(maxlen=max_events) if max_events > 0 else deque()
+        self._events_evicted = 0
         self._closed = False
 
     def record_detection(self, detection: Detection) -> None:
@@ -18,6 +21,8 @@ class MemoryStore:
 
     def record_event(self, event: Event) -> None:
         with self._lock:
+            if self._max_events > 0 and len(self._events) == self._max_events:
+                self._events_evicted += 1
             self._events.append(event)
 
     def list_detections(self, workflow_id: str, limit: int = 100) -> list[Detection]:
@@ -59,6 +64,21 @@ class MemoryStore:
                 "livelocks_detected": livelocks,
                 "total_events": len(self._events),
             }
+
+    def event_count(self) -> int:
+        with self._lock:
+            return len(self._events)
+
+    def drain_evicted(self) -> int:
+        """Return and clear the number of events evicted since last drain.
+
+        Used by the monitor to feed eviction counts into metrics without
+        double-counting across sweeps.
+        """
+        with self._lock:
+            n = self._events_evicted
+            self._events_evicted = 0
+            return n
 
     def close(self) -> None:
         self._closed = True

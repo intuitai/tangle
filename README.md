@@ -1,6 +1,6 @@
 # Tangle
 
-[![Tests](https://github.com/intuitai/tangle/actions/workflows/tests.yml/badge.svg)](https://github.com/intuitai/tangle/actions/workflows/tests.yml)
+[![Tests](https://github.com/nobelk/tangle/actions/workflows/tests.yml/badge.svg)](https://github.com/nobelk/tangle/actions/workflows/tests.yml)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/downloads/)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 [![Coverage](https://img.shields.io/badge/coverage-98%25-brightgreen.svg)](#running-tests)
@@ -274,7 +274,7 @@ returns a paginated envelope: `{items, total, limit, offset}`.
 
 ### LangGraph deadlock detection
 
-The `tangle-py/examples/langgraph_deadlock_detection.py` script shows a four-agent
+The `examples/langgraph_deadlock_detection.py` script shows a four-agent
 research pipeline — researcher, writer, reviewer, and editor — where the review/edit
 cycle creates a circular wait dependency:
 
@@ -295,7 +295,7 @@ The example has two parts:
 **Run it:**
 
 ```bash
-cd tangle-py && uv run python examples/langgraph_deadlock_detection.py
+uv run python examples/langgraph_deadlock_detection.py
 ```
 
 **Key instrumentation:**
@@ -338,7 +338,7 @@ to change the resolution behavior.
 
 ### Customer support escalation (livelock + deadlock)
 
-The `tangle-py/examples/customer_support_escalation.py` script demonstrates both
+The `examples/customer_support_escalation.py` script demonstrates both
 failure modes in a four-agent support pipeline — triage, researcher, drafter, and
 reviewer:
 
@@ -356,7 +356,7 @@ triage -> researcher -> drafter <-> reviewer (reject/revise loop)
 No external dependencies — uses the SDK directly (no LangGraph required):
 
 ```bash
-cd tangle-py && uv run python examples/customer_support_escalation.py
+uv run python examples/customer_support_escalation.py
 ```
 
 ## Configuration
@@ -498,6 +498,50 @@ idle periods.
   detector resets its buffers for that pair. This lets you keep aggressive
   detection thresholds without false positives.
 
+## Operations & replay
+
+Tangle ships with a replay subsystem for incident response: capture an
+append-only event log in production, package it into a self-contained
+bundle, and re-run the events offline against the same (or a new)
+detector. The full operator runbook — bundle creation, replay, regression
+diffing, CI integration, and troubleshooting — lives in
+[`OPERATIONS.md`](./OPERATIONS.md).
+
+Quick reference:
+
+```bash
+# Run with event logging enabled
+tangle --event-log /var/log/tangle/events.jsonl
+
+# Package an incident
+tangle bundle incident.tgz --event-log events.jsonl --note "INC-1422"
+
+# Replay it
+tangle replay incident.tgz
+
+# Compare replay against the recorded detections (exit 2 on regression — CI-friendly)
+tangle diff incident.tgz
+```
+
+`tangle --help` only lists serve flags; the `replay` / `bundle` / `diff`
+subcommands are routed when they appear as the first argument. See the
+runbook for the full surface.
+
+## Performance
+
+Headline single-thread numbers on an Apple M4 / Python 3.10:
+
+| Workload                                        | Median   | Throughput          |
+|-------------------------------------------------|----------|---------------------|
+| Incremental cycle detection (default depth 20)  | ~10 µs   | ~100 K edges/sec    |
+| Livelock check (window 50 / 100 / 200)          | 10–29 µs | 34–96 K msgs/sec    |
+| End-to-end `process_event`                      | ~98 µs   | ~10 K events/sec    |
+| Replay throughput                               | linear   | ~200 K events/sec   |
+
+Full methodology, hardware disclosure, per-benchmark medians + stddev,
+and reproduction instructions live in [`BENCHMARKS.md`](./BENCHMARKS.md).
+Run the suite locally with `make bench`.
+
 ## Development
 
 ### Setup
@@ -570,7 +614,7 @@ uv run mypy src/
 ## Project structure
 
 ```
-tangle-py/
+tangle/
   src/tangle/
     __init__.py          # Public API exports
     types.py             # Core types: Event, Edge, Cycle, Detection, enums
@@ -611,6 +655,12 @@ Tangle follows [Semantic Versioning](https://semver.org/). For full details see:
   upgrade policy.
 - **[CHANGELOG.md](CHANGELOG.md)** — release notes, breaking changes, and
   migration instructions.
+- **[OPERATIONS.md](OPERATIONS.md)** — replay runbook for incident response:
+  capturing event logs, building bundles, replaying offline, and diffing
+  live detections against replay results.
+- **[BENCHMARKS.md](BENCHMARKS.md)** — published performance baselines for
+  cycle detection, livelock checks, end-to-end ingest, and replay
+  throughput, with hardware disclosure and reproduction commands.
 
 **Integration tiers at a glance:**
 
